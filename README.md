@@ -1,2 +1,4 @@
-# slm-rag-assistant
-A locally hosted assistant SLM which uses RAG on a specific set of documents to ensure consistency. This project tests consistency and accuracy of small language models if they're provided a data source to work with.
+# SLM-RAG-ASSISTANT
+
+This project implements an Artificial Intelligence interface that uses RAG to extract data from a ChromaDB database based on context. The following model is executed locally using LMStudio: `deepseek-r1-distill-qwen-1.5b`.
+

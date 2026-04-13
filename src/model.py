@@ -6,43 +6,58 @@ import chromadb
 import json
 
 class Model:
-    _language       : str
-    _sources        : list[str]
-    _instructions   : Instructions
-    _collection     : chromadb.Collection
-    _client         : OpenAI
+    _language           : str
+    _files              : list[str]
+    _instructions       : Instructions
+    _collection         : chromadb.Collection
+    _client             : OpenAI
+    
+    _query_count        : int
+    
+    #Model settings     
+    _query_model        : str
+    _reasoning_model    : str
 
-    _query_count    : int
-
-    def __init__(self, query_count : int, lang : str):
+    def __init__(self, query_count : int, lang : str, query_model : str = "deepseek-r1-distill-qwen-1.5b", reason_model : str = "meta-llama-3.1-8b-instruct"):
         self._query_count = query_count
         self._language = lang
+        self._files = []
         self._instructions = Instructions(lang=lang)
         self._collection = get_collection()
+        self._query_model = query_model
+        self._reasoning_model = reason_model
         self._client = OpenAI(base_url=f"http://127.0.0.1:1234/v1", api_key="")
 
         self._loadPdfs()
+
+        print(f"Initialized model with language: {self._language}")
         pass
 
     def _loadPdfs(self):
         data_path = Path(__file__).resolve().parent.parent / "data"
         pdf_files = sorted(data_path.glob("*.pdf"))
-        # print(f"files: {[f.name for f in pdf_files]}")
         for pdf_file in pdf_files:
-            # print(f"Adding file: {pdf_file.name}")
             pdf_ingest(self._collection, str(pdf_file), pdf_file.name)
+            self._files.append(pdf_file.name)
 
+    def addPdfs(self, pdf_files : list[dict]):
+        print(f"Adding pdfs: {pdf_files}")
+        for pdf_file in pdf_files:
+            pdf_ingest(self._collection, str(pdf_file['path']), pdf_file['name'])
+            self._files.append(pdf_file['name'])
 
     def _queryMemories(self,user_question : str) -> list[str]:
         instruction = self._instructions.get_queryInstruction(n_queries=self._query_count, user_question=user_question)
+        print(f"instruction: {instruction}")
         completion = self._client.chat.completions.create(
-            model="deepseek-r1-distill-qwen-1.5b",
+            model=self._query_model,
             messages=[
                 {"role": "user", "content": instruction}
             ],
             temperature=0.1,
             response_format=self._instructions.get_responseFormat()
         )
+        print(f"response: {completion.choices[0].message.content}")
         queries = json.loads(completion.choices[0].message.content)['queries']
         return [q for q in queries if isinstance(q, str)]
     
@@ -73,9 +88,10 @@ class Model:
     def _getQueries(self, user_question : str, score_treshold : float = 0.45) -> str:
         queries = self._queryMemories(user_question=user_question)
         queryRecall = self._queryRecall(queries=queries, n_results=5)
+        print(f"Query recall: {queryRecall}, queries: {queries}")
 
         if not queryRecall or queryRecall[0]["score"] < score_treshold:
-            return "Information not found within provided data."
+            return self._instructions.get_errSources()
         
         return "\n\n".join(
                 f"[Source {i+1} | {r['metadata']['source']} p.{r['metadata'].get('page','?')}]\n{r['text']}"
@@ -85,10 +101,10 @@ class Model:
         memoryData = self._getQueries(user_question=user_question)
         prompt = self._instructions.get_promptInstruction(context=memoryData, user_question=user_question)
 
-        print(f"prompt: {prompt}")
+        print(f"prompt: {prompt}\n Data: {self._files}")
 
         completion = self._client.chat.completions.create(
-            model="meta-llama-3.1-8b-instruct",
+            model=self._reasoning_model,
             messages=[
                 {"role": "user", "content": prompt}
             ],

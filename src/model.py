@@ -55,7 +55,7 @@ class Model:
                 {"role": "user", "content": instruction}
             ],
             temperature=0.1,
-            response_format=self._instructions.get_responseFormat()
+            response_format=self._instructions.get_queryResponseFormat()
         )
         print(f"response: {completion.choices[0].message.content}")
         queries = json.loads(completion.choices[0].message.content)['queries']
@@ -109,6 +109,7 @@ class Model:
                 {"role": "user", "content": prompt}
             ],
             temperature=0.2,
+            response_format=self._instructions.get_promptResponseFormat()
         )
         return completion.choices[0].message.content
 

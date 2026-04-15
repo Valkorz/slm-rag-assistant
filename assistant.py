@@ -2,7 +2,9 @@ import tkinter as tk
 import customtkinter as ctk
 from PIL import Image
 from tkinter import filedialog
+from pathlib import Path
 import threading
+import json
 
 ctk.set_appearance_mode("dark")
 ctk.set_default_color_theme("dark-blue")
@@ -45,6 +47,18 @@ def update_files_list():
         name_label = ctk.CTkLabel(file_frame, text=f['name'], text_color="#e5e7eb")
         name_label.pack(side="left")
 
+        remove_btn = ctk.CTkButton(file_frame, text="X", 
+                       text_color="#e5e7eb", 
+                       fg_color="#990c32", 
+                       width=32,
+                       height=32,
+                       command=lambda file=f: _remove_and_reload(file))
+        remove_btn.pack(side="right")
+
+def _remove_and_reload(file):
+    files.remove(file)
+    update_files_list()
+
 def _finish_run(answer: str = "", error: str = "") -> None:
     loading_bar.stop()
     loading_bar.grid_remove()
@@ -54,8 +68,18 @@ def _finish_run(answer: str = "", error: str = "") -> None:
         response_content.configure(text=f"Run failed: {error}")
         print(f"Run failed: {error}")
         return
-    print(answer)
-    response_content.configure(text=answer)
+    # print(answer)
+
+    ansjson = json.loads(answer)
+    response_value = f"""
+    RESPONSE:
+    {ansjson['answer']}
+    
+    SOURCES:
+    {ansjson['sources']}
+    """
+
+    response_content.configure(text=response_value)
 
 
 def run_prompt() -> None:
@@ -214,7 +238,7 @@ question = ctk.CTkEntry(
     border_color="#263242",
     text_color="#e5e7eb",
 )
-question.grid(row=1, column=0, sticky="ew", padx=20, pady=5)
+question.grid(row=1,columnspan=2, sticky="ew", padx=20, pady=5)
 
 label_question_header = ctk.CTkLabel(
 	message_block,
@@ -222,7 +246,7 @@ label_question_header = ctk.CTkLabel(
 	font=("Segoe UI Semibold", 18),
 	text_color="#bbc3d2",
 )
-label_question_header.grid(row=0, column=0, sticky="ew", padx=20, pady=5)
+label_question_header.grid(row=0,columnspan=2, sticky="ew", padx=20, pady=5)
 
 # Actions
 actions_block = ctk.CTkFrame(
@@ -309,7 +333,7 @@ response_block = ctk.CTkFrame(
     border_color="#263242",
     border_width=1
 )
-response_block.grid(row=1, column=1, sticky="ew", padx=20, pady=5)
+response_block.grid(row=3,columnspan=2, sticky="ew", padx=20, pady=5)
 response_block.grid_columnconfigure(0, weight=1)
 
 response_content = ctk.CTkLabel(
@@ -334,7 +358,17 @@ label_response_header = ctk.CTkLabel(
 	font=("Segoe UI Semibold", 18),
 	text_color="#bbc3d2",
 )
-label_response_header.grid(row=0, column=1, sticky="ew", padx=20, pady=5)
+label_response_header.grid(row=2, columnspan=2, sticky="ew", padx=20, pady=5)
+
+# Initialize files with data folder contents
+for file in list(Path("./data/").glob("*.pdf")):
+    fstr = str(file.as_posix())
+    name = fstr.split('/')[-1]
+    files.append({
+        'name': name,
+        'path': fstr
+    })
+    update_files_list()
 
 root_window.mainloop()
 

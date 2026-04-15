@@ -29,18 +29,46 @@ class Instructions:
         else:
             return "AN ERROR OCCURED WITH THE REQUEST. PLEASE REPORT THIS."
 
-    def get_responseFormat(self) -> dict[str, object]:
+    def get_queryResponseFormat(self) -> dict:
+        """JSON schema for the query generation step."""
         return {
             "type": "json_schema",
             "json_schema": {
-                "name": "reasoning_response",
+                "name": "query_response",
                 "strict": True,
                 "schema": {
                     "type": "object",
                     "properties": {
-                        "queries": {"type": "array"},
+                        "queries": {
+                            "type": "array",
+                            "items": {"type": "string"}
+                        },
+                        "thought_process": {"type": "string"}
                     },
-                    "required": ["queries"],
+                    "required": ["queries", "thought_process"],
+                    "additionalProperties": False
+                }
+            }
+        }
+
+    def get_promptResponseFormat(self) -> dict:
+        """JSON schema for the answer generation step."""
+        return {
+            "type": "json_schema",
+            "json_schema": {
+                "name": "answer_response",
+                "strict": True,
+                "schema": {
+                    "type": "object",
+                    "properties": {
+                        "answer": {"type": "string"},
+                        "sources": {
+                            "type": "array",
+                            "items": {"type": "string"}
+                        },
+                        "thought_process": {"type": "string"}
+                    },
+                    "required": ["answer", "sources", "thought_process"],
                     "additionalProperties": False
                 }
             }
@@ -53,38 +81,49 @@ class Instructions:
             f"### TASK\n"
             f"Generate exactly {n_queries} short search queries to find information "
             f"that answers the question below.\n\n"
-            f"### STRICT OUTPUT RULES\n"
-            f"- Output ONLY a raw JSON array of strings.\n"
-            f"- No text before or after the array.\n"
-            f"- No explanations, no reasoning, no thought process.\n"
-            f"- Each query must be 5-10 words.\n\n"
-            f"### EXAMPLES\n"
+            f"### OUTPUT FORMAT\n"
+            f"Respond ONLY with a JSON object in this exact format:\n"
+            f"{{\n"
+            f'  "queries": ["query 1", "query 2", "query 3"],\n'
+            f'  "thought_process": "brief explanation of why you chose these queries"\n'
+            f"}}\n\n"
+            f"### QUERY RULES\n"
+            f"- Each query must be 5-10 words.\n"
+            f"- Queries must be in the same language as the question.\n"
+            f"- Queries must be meaningfully different from each other.\n\n"
+            f"### EXAMPLE\n"
             f"Question: What are the tax brackets for 2024?\n"
-            f'Output: ["tax brackets 2024", "income tax rates federal", "IRS tax table current year"]\n\n'
-            f"Question: How does photosynthesis work?\n"
-            f'Output: ["photosynthesis process explained", "how plants convert sunlight", "chlorophyll light energy conversion"]\n\n'
+            f"{{\n"
+            f'  "queries": ["tax brackets 2024", "income tax rates federal", "IRS tax table current year"],\n'
+            f'  "thought_process": "Searched for the brackets directly, then by rate type, then by the issuing authority."\n'
+            f"}}\n\n"
             f"### YOUR TURN\n"
             f"Question: {user_question}\n"
-            f"Output: ["
+            f"{{"
         )
 
     def _instPrompt_EN(self, context: str, user_question: str) -> str:
         return (
             f"### ROLE\n"
-            f"You are a document assistant. Your only job is to answer questions "
-            f"using the provided sources.\n\n"
-            f"### STRICT OUTPUT RULES\n"
-            f"- Use ONLY the sources below. Never use outside knowledge.\n"
-            f"- Output the final answer IMMEDIATELY. Do not analyze, plan, or think out loud.\n"
-            f"- No reasoning steps. No thought process. No <think>, <|channel>, or similar tags.\n"
-            f"- If the answer is not found in the sources, reply exactly: "
-            f"'{self._errSources_EN()}'\n"
-            f"- Always end with 'Source:' followed by the source name(s) used.\n\n"
+            f"You are a document assistant. Answer questions exclusively from the provided sources.\n\n"
+            f"### OUTPUT FORMAT\n"
+            f"Respond ONLY with a JSON object in this exact format:\n"
+            f"{{\n"
+            f'  "answer": "your final answer here",\n'
+            f'  "sources": ["Source name p.X", "Source name p.Y"],\n'
+            f'  "thought_process": "your internal reasoning about which sources were relevant"\n'
+            f"}}\n\n"
+            f"### ANSWER RULES\n"
+            f"- The 'answer' field must use ONLY information from the sources below.\n"
+            f"- The 'answer' field must be clean and direct — no reasoning, no hedging.\n"
+            f"- The 'sources' field must list every source used.\n"
+            f"- If the answer is not found in any source, set 'answer' to exactly: '{self._errSources_EN()}' and 'sources' to [].\n"
+            f"- The 'thought_process' field is for your internal reasoning only — it will not be shown to the user.\n\n"
             f"### SOURCES\n"
             f"{context}\n\n"
             f"### QUESTION\n"
             f"{user_question}\n\n"
-            f"### FINAL ANSWER (no preamble, start answering immediately)\n"
+            f"{{"
         )
 
     def _errSources_EN(self) -> str:
@@ -97,38 +136,49 @@ class Instructions:
             f"### TAREFA\n"
             f"Gere exatamente {n_queries} consultas de pesquisa curtas para encontrar "
             f"informações que respondam a pergunta abaixo.\n\n"
-            f"### REGRAS DE SAÍDA\n"
-            f"- Retorne APENAS um array JSON puro de strings.\n"
-            f"- Nenhum texto antes ou depois do array.\n"
-            f"- Sem explicações, sem raciocínio, sem processo de pensamento.\n"
-            f"- Cada consulta deve ter 5-10 palavras.\n\n"
-            f"### EXEMPLOS\n"
+            f"### FORMATO DE SAÍDA\n"
+            f"Responda APENAS com um objeto JSON neste formato exato:\n"
+            f"{{\n"
+            f'  "queries": ["consulta 1", "consulta 2", "consulta 3"],\n'
+            f'  "thought_process": "breve explicação de por que você escolheu essas consultas"\n'
+            f"}}\n\n"
+            f"### REGRAS DAS CONSULTAS\n"
+            f"- Cada consulta deve ter 5-10 palavras.\n"
+            f"- As consultas devem estar no mesmo idioma que a pergunta.\n"
+            f"- As consultas devem ser significativamente diferentes entre si.\n\n"
+            f"### EXEMPLO\n"
             f"Pergunta: O que são os impostos no Brasil em 2024?\n"
-            f'Saída: ["impostos Brasil 2024", "alíquotas imposto de renda", "tabela fiscal ano atual"]\n\n'
-            f"Pergunta: Como funciona a fotossíntese?\n"
-            f'Saída: ["processo fotossíntese explicado", "como plantas convertem luz solar", "conversão energia clorofila"]\n\n'
+            f"{{\n"
+            f'  "queries": ["impostos Brasil 2024", "alíquotas imposto de renda", "tabela fiscal ano atual"],\n'
+            f'  "thought_process": "Busquei diretamente pelos impostos, depois pelas alíquotas e por fim pela tabela oficial."\n'
+            f"}}\n\n"
             f"### SUA VEZ\n"
             f"Pergunta: {user_question}\n"
-            f"Saída: ["
+            f"{{"
         )
 
     def _instPrompt_PTBR(self, context: str, user_question: str) -> str:
         return (
             f"### FUNÇÃO\n"
-            f"Você é um assistente de documentos. Seu único trabalho é responder "
-            f"perguntas usando as fontes fornecidas.\n\n"
-            f"### REGRAS DE SAÍDA\n"
-            f"- Use APENAS as fontes abaixo. Nunca use conhecimento externo.\n"
-            f"- Escreva a resposta final IMEDIATAMENTE. Não analise, planeje ou pense em voz alta.\n"
-            f"- Sem etapas de raciocínio. Sem processo de pensamento. Sem tags <think>, <|channel> ou similares.\n"
-            f"- Se a resposta não estiver nas fontes, responda exatamente: "
-            f"'{self._errSources_PTBR()}'\n"
-            f"- Sempre termine com 'Fontes:' seguido do(s) nome(s) da(s) fonte(s) utilizada(s).\n\n"
+            f"Você é um assistente de documentos. Responda perguntas exclusivamente com base nas fontes fornecidas.\n\n"
+            f"### FORMATO DE SAÍDA\n"
+            f"Responda APENAS com um objeto JSON neste formato exato:\n"
+            f"{{\n"
+            f'  "answer": "sua resposta final aqui",\n'
+            f'  "sources": ["Nome da fonte p.X", "Nome da fonte p.Y"],\n'
+            f'  "thought_process": "seu raciocínio interno sobre quais fontes eram relevantes"\n'
+            f"}}\n\n"
+            f"### REGRAS DA RESPOSTA\n"
+            f"- O campo 'answer' deve usar APENAS informações das fontes abaixo.\n"
+            f"- O campo 'answer' deve ser limpo e direto — sem raciocínio, sem hesitações.\n"
+            f"- O campo 'sources' deve listar todas as fontes utilizadas.\n"
+            f"- Se a resposta não for encontrada em nenhuma fonte, defina 'answer' como exatamente: '{self._errSources_PTBR()}' e 'sources' como [].\n"
+            f"- O campo 'thought_process' é apenas para seu raciocínio interno — não será exibido ao usuário.\n\n"
             f"### FONTES\n"
             f"{context}\n\n"
             f"### PERGUNTA\n"
             f"{user_question}\n\n"
-            f"### RESPOSTA FINAL (sem preâmbulo, comece a responder imediatamente)\n"
+            f"{{"
         )
 
     def _errSources_PTBR(self) -> str:

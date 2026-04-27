@@ -3,15 +3,88 @@ import customtkinter as ctk
 from PIL import Image
 from tkinter import filedialog
 from pathlib import Path
+# from src.model.model_manager import ModelManager
 import threading
 import json
+from src.dialog.model_class_initialize import ModelInitializeDialog
 
 ctk.set_appearance_mode("dark")
 ctk.set_default_color_theme("dark-blue")
 
 files = []
+downloaded_models = ["None"]
 model = None
+initialize_dialog = None
 response = ""
+
+# Lazy initialization for model to avoid long loading times for window
+def initializeModel():
+    from src.model import Model
+    global model, downloaded_models
+    try:
+        model = Model(query_count=5)
+        downloaded_models = get_downloaded_models()
+        root_window.after(0, _on_model_ready)
+    except Exception as exc:
+        root_window.after(0, lambda error_message=str(exc): _on_model_error(error_message))
+
+
+def _on_model_ready() -> None:
+    button_prompt.configure(state="normal")
+    model_selector_query.configure(values=downloaded_models)
+    model_selector_reasoning.configure(values=downloaded_models)
+    if initialize_dialog is not None:
+        initialize_dialog.close("Model loaded")
+
+
+def _on_model_error(error_message: str) -> None:
+    button_prompt.configure(state="disabled")
+    if initialize_dialog is not None:
+        initialize_dialog.fail(f"Model load failed: {error_message}")
+
+# Model selection
+def model_select_callback(choice, option_menu : ctk.CTkOptionMenu):
+    if not choice:
+        pass
+
+    downloaded_models = get_downloaded_models()
+    if downloaded_models.__contains__(str(choice)):
+        option_menu.configure(fg_color="#9da7c7", hover_color="#9da7c7")
+    else: 
+        option_menu.configure(fg_color="#2563eb", hover_color="#1d4ed8")
+    pass
+
+def model_download(model_name : str):
+    from src.dialog.model_download import ModelDownloadDialog
+    dialog = ModelDownloadDialog(root_window, model.model_manager, model_name)
+    dialog.pack()
+    pass
+
+def select_models_folder() -> None:
+    selected = filedialog.askdirectory(
+        title="Select models root folder"
+    )
+
+    if not selected:
+        pass
+
+    entry_models_folder.delete(0,"end")
+    entry_models_folder.insert(0, selected)
+    model.model_manager.set_models_root_path(selected)
+    # print(f"downloaded models: {get_downloaded_models()}")
+
+    downloaded_models = get_downloaded_models()
+    model_selector_query.configure(values=downloaded_models)
+    model_selector_reasoning.configure(values=downloaded_models)
+    model_selector_query.set(downloaded_models[0])
+    model_selector_reasoning.set(downloaded_models[0])
+
+def get_downloaded_models() -> list[str]:
+    model_list = model.model_manager.list_downloaded()
+    if not model_list or len(model_list) == 0:
+        model_list = [" "]
+
+    return model_list
 
 # Update original select_pdf function
 def select_pdf() -> None:
@@ -59,7 +132,7 @@ def _remove_and_reload(file):
     files.remove(file)
     update_files_list()
 
-def _finish_run(answer: str = "", error: str = "") -> None:
+def _finish_run(answer = "", error: str = "") -> None:
     loading_bar.stop()
     loading_bar.grid_remove()
     loading_status.configure(text="")
@@ -70,13 +143,21 @@ def _finish_run(answer: str = "", error: str = "") -> None:
         return
     # print(answer)
 
-    ansjson = json.loads(answer)
+    if isinstance(answer, dict):
+        ansjson = answer
+    else:
+        try:
+            ansjson = json.loads(answer)
+        except json.JSONDecodeError:
+            response_content.configure(text=str(answer))
+            return
+
     response_value = f"""
     RESPONSE:
-    {ansjson['answer']}
+    {ansjson.get('answer', '')}
     
     SOURCES:
-    {ansjson['sources']}
+    {ansjson.get('sources', '')}
     """
 
     response_content.configure(text=response_value)
@@ -90,7 +171,7 @@ def run_prompt() -> None:
 
     button_prompt.configure(state="disabled", text="Running...")
     loading_status.configure(text="Loading model...")
-    loading_bar.grid(row=1, column=0, columnspan=2, sticky="ew", padx=20, pady=(8, 0))
+    loading_bar.grid(row=1, column=0, columnspan=3, sticky="ew", padx=20, pady=(8, 0))
     loading_bar.start()
 
     def worker() -> None:
@@ -102,6 +183,10 @@ def run_prompt() -> None:
                               lang=language_selector.get(), 
                               query_model=model_selector_query.get(),
                               reason_model=model_selector_reasoning.get())
+            else: 
+                model.set_query_model(model_selector_query.get())
+                model.set_resoning_model(model_selector_reasoning.get())
+                model.set_language(language_selector.get())
 
             if files:
                 model.addPdfs(files)
@@ -258,8 +343,9 @@ actions_block = ctk.CTkFrame(
     border_color="#1f2937",
 )
 actions_block.grid(row=3, column=0, columnspan=2, sticky="ew", pady=(0, 14))
-actions_block.grid_columnconfigure(0, weight=1)
-actions_block.grid_columnconfigure(1, weight=1)
+actions_block.grid_columnconfigure((0, 1, 2), weight=1, uniform="group1")
+actions_block.grid_rowconfigure(0, weight=1)
+actions_block.grid_rowconfigure(1, weight=1)
 
 language_selector = ctk.CTkOptionMenu(
 	actions_block,
@@ -275,7 +361,7 @@ language_selector.grid(row=0, column=0, sticky="ew", padx=20, pady=5)
 
 model_selector_query = ctk.CTkOptionMenu(
 	actions_block,
-	values=["deepseek-r1-distill-qwen-1.5b", "google/gemma-4-e2b", "local_model"],
+	values=downloaded_models,
 	fg_color="#18202a",
 	button_color="#1f2937",
 	button_hover_color="#273549",
@@ -287,7 +373,7 @@ model_selector_query.grid(row=0, column=1, sticky="ew", padx=20, pady=5)
 
 model_selector_reasoning = ctk.CTkOptionMenu(
 	actions_block,
-	values=["meta-llama-3.1-8b-instruct", "google/gemma-4-e4b", "local_model"],
+	values=downloaded_models,
 	fg_color="#18202a",
 	button_color="#1f2937",
 	button_hover_color="#273549",
@@ -305,8 +391,53 @@ button_prompt = ctk.CTkButton(
 	height=36,
 	fg_color="#2563eb",
 	hover_color="#1d4ed8",
+    state="disabled",
 )
 button_prompt.grid(row=0, column=3, sticky="ew", pady=5)
+
+# button_download_query = ctk.CTkButton(
+# 	actions_block,
+# 	text="Download",
+#     command=lambda: model_download(model_name=model_selector_query.get()),
+# 	corner_radius=10,
+# 	height=36,
+# 	fg_color="#2563eb",
+# 	hover_color="#1d4ed8",
+# )
+# button_download_query.grid(row=1, column=1, sticky="ew", pady=5)
+
+# button_download_reasoning = ctk.CTkButton(
+# 	actions_block,
+# 	text="Download",
+#     command=lambda: model_download(model_name=model_selector_reasoning.get()),
+# 	corner_radius=10,
+# 	height=36,
+# 	fg_color="#2563eb",
+# 	hover_color="#1d4ed8",
+# )
+# button_download_reasoning.grid(row=1, column=2, sticky="ew", pady=5)
+
+entry_models_folder = ctk.CTkEntry(
+    actions_block,
+    placeholder_text="C:/Path/To/Models/Folder/*UGGF",
+    corner_radius=10,
+    height=36,
+    fg_color="#0f141b",
+    border_color="#263242",
+    text_color="#e5e7eb"
+)
+entry_models_folder.grid(row=2,column=0,columnspan=3,sticky="ew",pady=5,padx=5)
+
+button_select_models_folder = ctk.CTkButton(
+	actions_block,
+	text="Select models root folder",
+    command=select_models_folder,
+	corner_radius=10,
+	height=36,
+	fg_color="#2563eb",
+	hover_color="#1d4ed8",
+)
+button_select_models_folder.grid(row=2, column=3, sticky="ew", pady=5,padx=5)   
 
 loading_status = ctk.CTkLabel(
     actions_block,
@@ -314,15 +445,16 @@ loading_status = ctk.CTkLabel(
     text_color="#9ca3af",
     anchor="w",
 )
-loading_status.grid(row=2, column=0, columnspan=2, sticky="ew", padx=20, pady=(6, 0))
+# loading_status.grid(row=2, column=0, columnspan=2, sticky="ew", padx=20, pady=(6, 0))
+# loading_status.configure(text="Loading model...")
 
 loading_bar = ctk.CTkProgressBar(
     actions_block,
     mode="indeterminate",
     progress_color="#1d4ed8",
 )
-loading_bar.grid(row=1, column=0, columnspan=2, sticky="ew", padx=20, pady=(8, 0))
-loading_bar.grid_remove()
+# loading_bar.grid(row=1, column=0, columnspan=2, sticky="ew", padx=20, pady=(8, 0))
+# loading_bar.start()
 
 # Response
 
@@ -369,6 +501,9 @@ for file in list(Path("./data/").glob("*.pdf")):
         'path': fstr
     })
     update_files_list()
+
+initialize_dialog = ModelInitializeDialog(root_window)
+root_window.after(0, lambda: threading.Thread(target=initializeModel, daemon=True).start())
 
 root_window.mainloop()
 

@@ -215,5 +215,8 @@ __marimo__/
 *.bin
 *.exe
 
+# AI
+models/
+
 # Other
 TODO.md

@@ -2,10 +2,15 @@ from openai import OpenAI
 from src.memory import get_collection, store, recall, pdf_ingest
 from src.instructions.instructions import Instructions
 from pathlib import Path
+from .model_manager import ModelManager
 import chromadb
 import json
 
 class Model:
+    #public
+    model_manager       : ModelManager
+
+    #private
     _language           : str
     _files              : list[str]
     _instructions       : Instructions
@@ -18,7 +23,7 @@ class Model:
     _query_model        : str
     _reasoning_model    : str
 
-    def __init__(self, query_count : int, lang : str, query_model : str = "deepseek-r1-distill-qwen-1.5b", reason_model : str = "meta-llama-3.1-8b-instruct"):
+    def __init__(self, query_count : int, lang : str = "EN", query_model : str = "deepseek-r1-distill-qwen-1.5b", reason_model : str = "meta-llama-3.1-8b-instruct"):
         self._query_count = query_count
         self._language = lang
         self._files = []
@@ -26,12 +31,22 @@ class Model:
         self._collection = get_collection()
         self._query_model = query_model
         self._reasoning_model = reason_model
-        self._client = OpenAI(base_url=f"http://127.0.0.1:1234/v1", api_key="")
+        # self._client = OpenAI(base_url=f"http://127.0.0.1:1234/v1", api_key="")
+        self.model_manager = ModelManager()
 
         self._loadPdfs()
 
         print(f"Initialized model with language: {self._language}")
         pass
+
+    def set_language(self, lang : str):
+        self._language = lang
+
+    def set_query_model(self, name : str):
+        self._query_model = name
+
+    def set_resoning_model(self, name : str):
+        self._reasoning_model = name
 
     def _loadPdfs(self):
         data_path = Path(__file__).resolve().parent.parent / "data"
@@ -46,19 +61,49 @@ class Model:
             pdf_ingest(self._collection, str(pdf_file['path']), pdf_file['name'])
             self._files.append(pdf_file['name'])
 
+    def _extract_completion_text(self, completion) -> str:
+        if isinstance(completion, str):
+            return completion
+
+        if isinstance(completion, dict):
+            choices = completion.get("choices")
+            if isinstance(choices, list) and choices:
+                first = choices[0]
+                if isinstance(first, dict):
+                    text = first.get("text")
+                    if isinstance(text, str):
+                        return text
+
+                    message = first.get("message")
+                    if isinstance(message, dict):
+                        content = message.get("content")
+                        if isinstance(content, str):
+                            return content
+
+        raise TypeError("Model completion format is not supported")
+
+    def _parse_completion_json(self, completion) -> dict:
+        if isinstance(completion, dict) and "queries" in completion:
+            return completion
+
+        return json.loads(self._extract_completion_text(completion))
+
     def _queryMemories(self,user_question : str) -> list[str]:
         instruction = self._instructions.get_queryInstruction(n_queries=self._query_count, user_question=user_question)
-        print(f"instruction: {instruction}")
-        completion = self._client.chat.completions.create(
-            model=self._query_model,
-            messages=[
-                {"role": "user", "content": instruction}
-            ],
-            temperature=0.1,
-            response_format=self._instructions.get_queryResponseFormat()
-        )
-        print(f"response: {completion.choices[0].message.content}")
-        queries = json.loads(completion.choices[0].message.content)['queries']
+        # print(f"instruction: {instruction}")
+        # completion = self._client.chat.completions.create(
+        #     model=self._query_model,
+        #     messages=[
+        #         {"role": "user", "content": instruction}
+        #     ],
+        #     temperature=0.1,
+        #     response_format=self._instructions.get_queryResponseFormat()
+        # )
+
+        self.model_manager.load(model_name=self._query_model)
+        completion = self.model_manager.create_completion(prompt=instruction)
+
+        queries = self._parse_completion_json(completion).get('queries', [])
         return [q for q in queries if isinstance(q, str)]
     
     def _queryRecall(self, queries : list[str], n_results : int = 5) -> list[dict]:
@@ -101,16 +146,20 @@ class Model:
         memoryData = self._getQueries(user_question=user_question)
         prompt = self._instructions.get_promptInstruction(context=memoryData, user_question=user_question)
 
-        print(f"prompt: {prompt}\n Data: {self._files}")
+        # print(f"prompt: {prompt}\n Data: {self._files}")
 
-        completion = self._client.chat.completions.create(
-            model=self._reasoning_model,
-            messages=[
-                {"role": "user", "content": prompt}
-            ],
-            temperature=0.2,
-            response_format=self._instructions.get_promptResponseFormat()
-        )
-        return completion.choices[0].message.content
+        # completion = self._client.chat.completions.create(
+        #     model=self._reasoning_model,
+        #     messages=[
+        #         {"role": "user", "content": prompt}
+        #     ],
+        #     temperature=0.2,
+        #     response_format=self._instructions.get_promptResponseFormat()
+        # )
+        # return completion.choices[0].message.content
+
+        self.model_manager.load(model_name=self._reasoning_model)
+        completion = self.model_manager.create_completion(prompt=prompt)
+        return self._extract_completion_text(completion)
 
     

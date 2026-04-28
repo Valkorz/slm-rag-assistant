@@ -3,6 +3,11 @@ from datetime import datetime
 from typing import Optional
 import chromadb
 from chromadb import Documents, EmbeddingFunction, Embeddings
+
+import os
+os.environ["TRANSFORMERS_OFFLINE"] = "1"
+os.environ["HF_DATASETS_OFFLINE"] = "1"
+
 from sentence_transformers import SentenceTransformer
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 import pymupdf as pdf

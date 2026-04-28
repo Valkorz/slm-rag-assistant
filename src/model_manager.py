@@ -41,6 +41,9 @@ class ModelManager:
         self._root_model_path = str(self.models_dir)
         self.find_models_root_path(self._root_model_path)
 
+    def get_models_root_path(self) -> str:
+        return self._root_model_path
+
     def list_available(self) -> list[dict]:
         available = []
         for name, info in self.KNOWN_MODELS.items():

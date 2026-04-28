@@ -4,6 +4,7 @@ from PIL import Image
 from tkinter import filedialog
 from pathlib import Path
 # from src.model.model_manager import ModelManager
+from src.config_loader import get_config, save_config
 import threading
 import json
 from src.dialog.model_class_initialize import ModelInitializeDialog
@@ -16,6 +17,9 @@ downloaded_models = ["None"]
 model = None
 initialize_dialog = None
 response = ""
+selected_models_folder = ""
+
+config_json = get_config()
 
 # Lazy initialization for model to avoid long loading times for window
 def initializeModel():
@@ -71,6 +75,7 @@ def select_models_folder() -> None:
     entry_models_folder.delete(0,"end")
     entry_models_folder.insert(0, selected)
     model.model_manager.set_models_root_path(selected)
+    selected_models_folder = selected
     # print(f"downloaded models: {get_downloaded_models()}")
 
     downloaded_models = get_downloaded_models()
@@ -86,7 +91,6 @@ def get_downloaded_models() -> list[str]:
 
     return model_list
 
-# Update original select_pdf function
 def select_pdf() -> None:
     selected = filedialog.askopenfilename(
         title="Select a PDF file",
@@ -141,7 +145,6 @@ def _finish_run(answer = "", error: str = "") -> None:
         response_content.configure(text=f"Run failed: {error}")
         print(f"Run failed: {error}")
         return
-    # print(answer)
 
     if isinstance(answer, dict):
         ansjson = answer
@@ -395,28 +398,6 @@ button_prompt = ctk.CTkButton(
 )
 button_prompt.grid(row=0, column=3, sticky="ew", pady=5)
 
-# button_download_query = ctk.CTkButton(
-# 	actions_block,
-# 	text="Download",
-#     command=lambda: model_download(model_name=model_selector_query.get()),
-# 	corner_radius=10,
-# 	height=36,
-# 	fg_color="#2563eb",
-# 	hover_color="#1d4ed8",
-# )
-# button_download_query.grid(row=1, column=1, sticky="ew", pady=5)
-
-# button_download_reasoning = ctk.CTkButton(
-# 	actions_block,
-# 	text="Download",
-#     command=lambda: model_download(model_name=model_selector_reasoning.get()),
-# 	corner_radius=10,
-# 	height=36,
-# 	fg_color="#2563eb",
-# 	hover_color="#1d4ed8",
-# )
-# button_download_reasoning.grid(row=1, column=2, sticky="ew", pady=5)
-
 entry_models_folder = ctk.CTkEntry(
     actions_block,
     placeholder_text="C:/Path/To/Models/Folder/*UGGF",
@@ -505,5 +486,22 @@ for file in list(Path("./data/").glob("*.pdf")):
 initialize_dialog = ModelInitializeDialog(root_window)
 root_window.after(0, lambda: threading.Thread(target=initializeModel, daemon=True).start())
 
+# Load config
+if config_json:
+    entry_models_folder.delete(0,"end")
+    entry_models_folder.insert(0, config_json['root_model_path'])
+    files = config_json['documents']
+    language_selector.set(config_json['language'])
+    model_selector_query.set(config_json['model_query'])
+    model_selector_reasoning.set(config_json['model_reason'])
+
+# Initialize window
 root_window.mainloop()
 
+save_config(
+    root_model_path=entry_models_folder.get(),
+    previous_question=question.get(),
+    documents=files,
+    language=language_selector.get(),
+    model_query=model_selector_query.get(),
+    model_reason=model_selector_reasoning.get())

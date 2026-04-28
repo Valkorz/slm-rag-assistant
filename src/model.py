@@ -5,6 +5,7 @@ from pathlib import Path
 from .model_manager import ModelManager
 import chromadb
 import json
+import re
 
 class Model:
     #public
@@ -86,22 +87,52 @@ class Model:
         if isinstance(completion, dict) and "queries" in completion:
             return completion
 
-        return json.loads(self._extract_completion_text(completion))
+        text = self._extract_completion_text(completion)
+        return self._extract_json_from_text(text)
+
+    def _extract_json_from_text(self, text: str) -> dict:
+        # Try to parse the JSON in all possible ways 
+
+        candidates = []
+        for m in re.finditer(r"```(?:json)?\s*([\s\S]*?)\s*```", text, re.IGNORECASE):
+            candidates.append(m.group(1).strip())
+
+        if not candidates:
+            starts = [m.start() for m in re.finditer(r"\{", text)]
+            for i in starts:
+                depth = 0
+                for j in range(i, len(text)):
+                    if text[j] == '{':
+                        depth += 1
+                    elif text[j] == '}':
+                        depth -= 1
+                        if depth == 0:
+                            candidate = text[i:j+1]
+                            candidates.append(candidate)
+                            break
+
+        last_valid = None
+        for cand in candidates:
+            try:
+                parsed = json.loads(cand)
+                if isinstance(parsed, dict):
+                    last_valid = parsed
+            except Exception:
+                continue
+
+        if last_valid is not None:
+            return last_valid
+
+        try:
+            return json.loads(text)
+        except Exception as e:
+            raise ValueError(f"No valid JSON object found in model output: {e}")
 
     def _queryMemories(self,user_question : str) -> list[str]:
         instruction = self._instructions.get_queryInstruction(n_queries=self._query_count, user_question=user_question)
-        # print(f"instruction: {instruction}")
-        # completion = self._client.chat.completions.create(
-        #     model=self._query_model,
-        #     messages=[
-        #         {"role": "user", "content": instruction}
-        #     ],
-        #     temperature=0.1,
-        #     response_format=self._instructions.get_queryResponseFormat()
-        # )
 
         self.model_manager.load(model_name=self._query_model)
-        completion = self.model_manager.create_completion(prompt=instruction)
+        completion = json.loads("{"+self.model_manager.create_completion(prompt=instruction)['choices'][0]['text'])
 
         queries = self._parse_completion_json(completion).get('queries', [])
         return [q for q in queries if isinstance(q, str)]
@@ -146,20 +177,21 @@ class Model:
         memoryData = self._getQueries(user_question=user_question)
         prompt = self._instructions.get_promptInstruction(context=memoryData, user_question=user_question)
 
-        # print(f"prompt: {prompt}\n Data: {self._files}")
-
-        # completion = self._client.chat.completions.create(
-        #     model=self._reasoning_model,
-        #     messages=[
-        #         {"role": "user", "content": prompt}
-        #     ],
-        #     temperature=0.2,
-        #     response_format=self._instructions.get_promptResponseFormat()
-        # )
-        # return completion.choices[0].message.content
-
         self.model_manager.load(model_name=self._reasoning_model)
-        completion = self.model_manager.create_completion(prompt=prompt)
-        return self._extract_completion_text(completion)
+        response = self.model_manager.create_completion(prompt=prompt)
+        raw_text = response.get('choices', [{}])[0].get('text', '')
+        print("completion prompt: "+raw_text)
+
+        # For the love of God just parse
+        parsed = None
+        try:
+            parsed = self._extract_json_from_text(raw_text)
+        except ValueError:
+            return raw_text
+
+        try:
+            return self._extract_completion_text(parsed)
+        except TypeError:
+            return json.dumps(parsed)
 
     

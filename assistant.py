@@ -174,7 +174,7 @@ def run_prompt() -> None:
 
     button_prompt.configure(state="disabled", text="Running...")
     loading_status.configure(text="Loading model...")
-    loading_bar.grid(row=1, column=0, columnspan=3, sticky="ew", padx=20, pady=(8, 0))
+    loading_bar.grid(row=2, column=0, columnspan=3, sticky="ew", padx=20, pady=(8, 0))
     loading_bar.start()
 
     def worker() -> None:
@@ -361,6 +361,14 @@ actions_block.grid_columnconfigure((0, 1, 2), weight=1, uniform="group1")
 actions_block.grid_rowconfigure(0, weight=1)
 actions_block.grid_rowconfigure(1, weight=1)
 
+label_language = ctk.CTkLabel(
+    actions_block,
+    text="Language",
+    font=("Segoe UI Semibold", 12),
+    text_color="#bbc3d2",
+)
+label_language.grid(row=0, column=0, sticky="ew", padx=20, pady=5)
+
 language_selector = ctk.CTkOptionMenu(
 	actions_block,
 	values=["EN","PTBR"],
@@ -371,31 +379,47 @@ language_selector = ctk.CTkOptionMenu(
 	corner_radius=10,
 	height=38
 )
-language_selector.grid(row=0, column=0, sticky="ew", padx=20, pady=5)
+language_selector.grid(row=1, column=0, sticky="ew", padx=20, pady=5)
+
+label_query_model = ctk.CTkLabel(
+    actions_block,
+    text="Query Model",
+    font=("Segoe UI Semibold", 12),
+    text_color="#bbc3d2",
+)
+label_query_model.grid(row=0, column=1, sticky="ew", padx=20, pady=5)
+
+label_reasoning_model = ctk.CTkLabel(
+    actions_block,
+    text="Reasoning Model",
+    font=("Segoe UI Semibold", 12),
+    text_color="#bbc3d2",
+)
+label_reasoning_model.grid(row=0, column=2, sticky="ew", padx=20, pady=5)
 
 model_selector_query = ctk.CTkOptionMenu(
-	actions_block,
-	values=downloaded_models,
-	fg_color="#18202a",
-	button_color="#1f2937",
-	button_hover_color="#273549",
-	dropdown_fg_color="#11151c",
-	corner_radius=10,
-	height=38
+    actions_block,
+    values=downloaded_models,
+    fg_color="#18202a",
+    button_color="#1f2937",
+    button_hover_color="#273549",
+    dropdown_fg_color="#11151c",
+    corner_radius=10,
+    height=38
 )
-model_selector_query.grid(row=0, column=1, sticky="ew", padx=20, pady=5)
+model_selector_query.grid(row=1, column=1, sticky="ew", padx=20, pady=5)
 
 model_selector_reasoning = ctk.CTkOptionMenu(
-	actions_block,
-	values=downloaded_models,
-	fg_color="#18202a",
-	button_color="#1f2937",
-	button_hover_color="#273549",
-	dropdown_fg_color="#11151c",
-	corner_radius=10,
-	height=38
+    actions_block,
+    values=downloaded_models,
+    fg_color="#18202a",
+    button_color="#1f2937",
+    button_hover_color="#273549",
+    dropdown_fg_color="#11151c",
+    corner_radius=10,
+    height=38
 )
-model_selector_reasoning.grid(row=0, column=2, sticky="ew", padx=20, pady=5)
+model_selector_reasoning.grid(row=1, column=2, sticky="ew", padx=20, pady=5)
 
 button_prompt = ctk.CTkButton(
 	actions_block,
@@ -407,7 +431,7 @@ button_prompt = ctk.CTkButton(
 	hover_color="#1d4ed8",
     state="disabled",
 )
-button_prompt.grid(row=0, column=3, sticky="ew", pady=5)
+button_prompt.grid(row=1, column=3, sticky="ew", pady=5)
 
 entry_models_folder = ctk.CTkEntry(
     actions_block,
@@ -418,7 +442,7 @@ entry_models_folder = ctk.CTkEntry(
     border_color="#263242",
     text_color="#e5e7eb"
 )
-entry_models_folder.grid(row=2,column=0,columnspan=3,sticky="ew",pady=5,padx=5)
+entry_models_folder.grid(row=3,column=0,columnspan=3,sticky="ew",pady=5,padx=5)
 
 button_select_models_folder = ctk.CTkButton(
 	actions_block,
@@ -429,7 +453,7 @@ button_select_models_folder = ctk.CTkButton(
 	fg_color="#2563eb",
 	hover_color="#1d4ed8",
 )
-button_select_models_folder.grid(row=2, column=3, sticky="ew", pady=5,padx=5)   
+button_select_models_folder.grid(row=3, column=3, sticky="ew", pady=5,padx=5)   
 
 loading_status = ctk.CTkLabel(
     actions_block,

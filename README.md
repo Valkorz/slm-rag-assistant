@@ -14,6 +14,8 @@ This project was created using `Python 3.12.6` and a list of libraries disclosed
 
 2. **Download the Small Language Models**
 
+    **IMPORTANT: Download the files that contain tags such as 'Q4_K' in the name, which stand for quantization level. Quantized models are lighter and faster.**
+    
     From within the HuggingFace interface, download the following models:
     - [meta-llama-3.1-8b-instruct](https://huggingface.co/meta-llama/Llama-3.1-8B-Instruct)
     - [deepseek-r1-distill-qwen-1.5b](https://huggingface.co/deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B)

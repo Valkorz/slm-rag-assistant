@@ -212,6 +212,17 @@ root_window.configure(fg_color="#0b0d11")
 root_window.grid_rowconfigure(0, weight=1)
 root_window.grid_columnconfigure(0, weight=1)
 
+def on_closing():
+    print("Encerrando aplicativo...")
+    save_config(
+    root_model_path=entry_models_folder.get(),
+    previous_question=question.get(),
+    documents=files,
+    language=language_selector.get(),
+    model_query=model_selector_query.get(),
+    model_reason=model_selector_reasoning.get())
+    root_window.destroy()
+
 page_canvas = tk.Canvas(
     root_window,
     highlightthickness=0,
@@ -496,12 +507,7 @@ if config_json:
     model_selector_reasoning.set(config_json['model_reason'])
 
 # Initialize window
+root_window.protocol("WM_DELETE_WINDOW", on_closing)
 root_window.mainloop()
 
-save_config(
-    root_model_path=entry_models_folder.get(),
-    previous_question=question.get(),
-    documents=files,
-    language=language_selector.get(),
-    model_query=model_selector_query.get(),
-    model_reason=model_selector_reasoning.get())
+

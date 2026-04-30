@@ -1,7 +1,15 @@
+# Core AI & LLM
 chromadb>=0.5.23
 sentence-transformers>=3.2.1
+openai>=2.24.0
+llama-cpp-python>=0.2.0
+huggingface-hub>=0.24.0
+
+# Document Processing
 pymupdf>=1.27.2.2
 langchain_text_splitters>=1.1.1
-openai>=2.24.0
+
+# UI
 pillow>=11.2.1
+customtkinter>=5.2.0
 

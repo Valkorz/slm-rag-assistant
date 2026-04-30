@@ -7,12 +7,12 @@ class ModelManager:
     #List of verified models
     KNOWN_MODELS = {
         "gemma-4-e4b": {
-            "repo": "google/gemma-4-E4B-it-GGUF",
+            "repo": "unsloth/gemma-4-E2B-it-GGUF",
             "file": "gemma-4-E4B-it-Q4_K_M.gguf",
             "description": "Gemma 4 E4B Instruct (recommended)"
         },
         "gemma-4-e2b": {
-            "repo": "google/gemma-4-E2B-it-GGUF",
+            "repo": "unsloth/gemma-4-E4B-it-GGUF",
             "file": "gemma-4-E2B-it-Q4_K_M.gguf",
             "description": "Gemma 4 E2B Instruct (lightweight)"
         },

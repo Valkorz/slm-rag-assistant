@@ -6,24 +6,26 @@ This project implements a Small Language Model interface that uses RAG (Retrieva
 
 ## 💻 Setup
 
-This project was created using `Python 3.12.6` and a list of libraries disclosed within `requirements.txt`. The small-language-models used were downloaded and hosted locally using `LMStudio`. The following steps are necessary to execute this project:
+This project was created using `Python 3.12.6` and a list of libraries disclosed within `requirements.txt`. The small-language-models used were downloaded from `huggingface.co` and hosted locally using the `LLama` library. The following steps are necessary to execute this project:
 
-1. **Install LMStudio**
+1. **Visit Huggingface.co**
 
-    [LMStudio](https://lmstudio.ai/) is a free tool for running small to large language models locally, allowing the prompting to be done through a built-in interface or through user-defined endpoints.
+    [HuggingFace](https://huggingface.co/models) is an online community that allows the download of Large Language Models, as `.GGUF` files, used for local hosting. **IMPORTANT:** You must download the GGUF files as they are quantized vesions of the model, with higher efficiency and lower hardware requirement.
 
 2. **Download the Small Language Models**
 
-    From within the LMStudio interface, download the following models:
-    - `meta-llama-3.1-8b-instruct`
-    - `deepseek-r1-distill-qwen-1.5b`
+    From within the HuggingFace interface, download the following models:
+    - [meta-llama-3.1-8b-instruct](https://huggingface.co/meta-llama/Llama-3.1-8B-Instruct)
+    - [deepseek-r1-distill-qwen-1.5b](https://huggingface.co/deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B)
 
     Alternatively, for a broader language support, you can use these models:
-    - `google/gemma-4-e2b`
-    - `google/gemma-4-e4b`
+    - [google/gemma-4-e2b](https://huggingface.co/unsloth/gemma-4-E2B-it-GGUF/tree/main)
+    - [google/gemma-4-e4b](https://huggingface.co/unsloth/gemma-4-E4B-it-GGUF/tree/main)
 
     The following image illustrates the download procedure:
-    ![LMStudio model download interface using huggingface](docs/images/lmstudio-modeldownload.png)
+    ![Downloading models from huggingface](docs/images/huggingface-modeldownload.png)
+
+    After downloading the models, create a designated folder on your computer for storing them.
 
 3. **Install required libraries**
 
@@ -34,23 +36,26 @@ This project was created using `Python 3.12.6` and a list of libraries disclosed
     ```
     This will install all necessary dependencies explicitly stated within the requirements file.
     These are the required libraries:
+
     ```
         chromadb>=0.5.23
         sentence-transformers>=3.2.1
+        openai>=2.24.0
+        llama-cpp-python>=0.2.0
+        huggingface-hub>=0.24.0
+
         pymupdf>=1.27.2.2
         langchain_text_splitters>=1.1.1
-        openai>=2.24.0
-        pillow>=11.2.1
-    ```
-4. **Initiate the local hosting of a language model**
-    For the model usage, you must load the necessary models and start the server. The application's interface makes this task simple. Please refer to the following image:
-    ![LMStudio model loading](docs/images/lmstudio-modelloading.png)
 
-5. **Interface initialization and usage**
+        pillow>=11.2.1
+        customtkinter>=5.2.0
+    ```
+
+4. **Interface initialization and usage**
     To execute the project, you must ensure you have Python at version `3.12.6` or above, then simply execute the `assistant.py` script, which initiates a TKinter window. 
     Inside the running instance, the user is able to select documents from the desktop, change the model's language and perform a question, which will be answered by the model based on the contents found within the source files. 
     The first initialization may take a while.
-    **IMPORTANT: the LMStudio server MUST be running with both models loaded and active.**
+    **IMPORTANT: You must select a folder that contains your .GGUF files and then select a query and reasoning model.**
     The following image showcases an usage example for the assistant.
 
     ![Application instance](docs/images/assistant.png)
@@ -58,11 +63,6 @@ This project was created using `Python 3.12.6` and a list of libraries disclosed
     The picture shows the TKinter interface being executed. The user has selected a document named: `Uncertainty_principle....pdf`, and asked the following question: "What does the wave of a particle have to do with the uncertainty principle?". After roughly 1 minute and 30 seconds, the assistant read the PDF, chunkized it into the database and provided a matching chunk as a response. The model did not invent anything as the response is exactly as present inside the source material:
 
     ![Source material](docs/images/source-material.png)
-
-6. **Perform a headless prompt**
-    You can also perform a headless prompt by running the following command inside the terminal (while accessing the project folder): 
-
-    ```python prompt_assistant.py -f [list_of_file_paths] -q "question"```
 
 ---
 

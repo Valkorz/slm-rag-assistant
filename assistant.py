@@ -1,10 +1,12 @@
 import tkinter as tk
 import customtkinter as ctk
+import asyncio 
 from PIL import Image
 from tkinter import filedialog
 from pathlib import Path
 # from src.model.model_manager import ModelManager
 from src.config_loader import get_config, save_config
+from src.assistant_request_socket import AssistantRequestSocket
 import threading
 import json
 from src.dialog.model_class_initialize import ModelInitializeDialog
@@ -20,6 +22,38 @@ response = ""
 selected_models_folder = ""
 
 config_json = get_config()
+
+#start TCP socket for receiving requests oustide the UI
+_event_loop = asyncio.new_event_loop()
+def _start_asyncio_loop(loop):
+    asyncio.set_event_loop(loop)
+    loop.run_forever()
+
+_asyncio_thread = threading.Thread(target=_start_asyncio_loop, args=(_event_loop,), daemon=True)
+_asyncio_thread.start()
+tcp_socket = AssistantRequestSocket(port=8008)
+tcp_socket.set_event_loop(_event_loop)
+
+def on_host_toggled():
+    hosting_port.delete(0,"end")
+    hosting_address.delete(0,"end")
+    if switch_tcp_toggle.get() == 1:
+        hosting_port.insert(0, tcp_socket.port)
+        hosting_address.insert(0, tcp_socket.host)
+        
+    tcp_socket.toggle_sync(state=switch_tcp_toggle.get(), tcp_callback=_tcp_request_handler)
+
+def _tcp_request_handler(message: str) -> str:
+    try:
+        if model is None:
+            return '{"error": "Model not loaded yet."}'
+        # answer = model.prompt(user_question=message)
+        # root_window.after(0, lambda: _finish_run(answer=answer))
+        # return answer if isinstance(answer, str) else str(answer)
+        print(f"Received TCP message: {message}")
+        return message
+    except Exception as exc:
+        return f'{{"error": "{str(exc)}"}}'
 
 # Lazy initialization for model to avoid long loading times for window
 def initializeModel():
@@ -471,6 +505,37 @@ loading_bar = ctk.CTkProgressBar(
 )
 # loading_bar.grid(row=1, column=0, columnspan=2, sticky="ew", padx=20, pady=(8, 0))
 # loading_bar.start()
+
+hosting_address = ctk.CTkEntry(
+    actions_block,
+    placeholder_text="0.0.0.0",
+    corner_radius=10,
+    height=36,
+    fg_color="#0f141b",
+    border_color="#263242",
+    text_color="#e5e7eb",
+    state="readonly"
+)
+hosting_address.grid(row=4, column=0, columnspan=2, sticky="ew", pady=5,padx=5)   
+
+hosting_port = ctk.CTkEntry(
+    actions_block,
+    placeholder_text="0000",
+    corner_radius=10,
+    height=36,
+    fg_color="#0f141b",
+    border_color="#263242",
+    text_color="#e5e7eb",
+    state="readonly"
+)
+hosting_port.grid(row=4, column=2, sticky="ew", pady=5,padx=5)   
+
+switch_tcp_toggle = ctk.CTkSwitch(
+    actions_block,
+    text="TCP",
+    command=on_host_toggled
+)
+switch_tcp_toggle.grid(row=4, column=3, sticky="ew", pady=5,padx=5)   
 
 # Response
 

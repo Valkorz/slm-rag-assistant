@@ -1,12 +1,22 @@
 import hashlib
 from datetime import datetime
 from typing import Optional
+from pathlib import Path
 import chromadb
 from chromadb import Documents, EmbeddingFunction, Embeddings
 
+#Avoid redownloading the model if it already exists on huggingface cache
 import os
-os.environ["TRANSFORMERS_OFFLINE"] = "1"
-os.environ["HF_DATASETS_OFFLINE"] = "1"
+model_name = "all-MiniLM-L6-v2"
+cache_dir = Path.home() / ".cache" / "huggingface" / "hub"
+cached_name = f"models--sentence-transformers--{model_name.replace('/', '--')}"
+is_cached = (cache_dir / cached_name).exists()
+if is_cached:
+    os.environ["TRANSFORMERS_OFFLINE"] = "1"
+    os.environ["HF_DATASETS_OFFLINE"] = "1"
+    print(f"Loading '{model_name}' from local cache.")
+else:
+    print(f"'{model_name}' not cached — downloading once...")
 
 from sentence_transformers import SentenceTransformer
 from langchain_text_splitters import RecursiveCharacterTextSplitter
@@ -14,7 +24,7 @@ import pymupdf as pdf
 
 # Controls how the raw text gets converted to vectors
 class SentenceTransformerEmbeddings(EmbeddingFunction):
-    def __init__(self, model_name: str = "all-MiniLM-L6-v2"):
+    def __init__(self):
         self.model = SentenceTransformer(model_name)
 
     def __call__(self, input):

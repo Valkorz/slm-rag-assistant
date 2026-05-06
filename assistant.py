@@ -41,6 +41,7 @@ def on_host_toggled():
         hosting_port.insert(0, tcp_socket.port)
         hosting_address.insert(0, tcp_socket.host)
         
+    tcp_socket.set_prompt_callback(_model_prompt_routine)    
     tcp_socket.toggle_sync(state=switch_tcp_toggle.get(), tcp_callback=_tcp_request_handler)
 
 def _tcp_request_handler(message: str) -> str:
@@ -50,10 +51,21 @@ def _tcp_request_handler(message: str) -> str:
         # answer = model.prompt(user_question=message)
         # root_window.after(0, lambda: _finish_run(answer=answer))
         # return answer if isinstance(answer, str) else str(answer)
-        print(f"Received TCP message: {message}")
-        return message
+        # print(f"Received TCP message: {message}")
+
+        data = tcp_socket.parse_response(message)
+        print(f"Data received:{data['data']}")
+        return data['data']
     except Exception as exc:
         return f'{{"error": "{str(exc)}"}}'
+    
+def _model_prompt_routine(user_question : str, lang : str, model_query : str, model_reason : str) -> str:
+    question.delete(0, "end")
+    question.insert(0, user_question)
+    language_selector.set(lang)
+    model_selector_query.set(model_query)
+    model_selector_reasoning.set(model_reason)
+    run_prompt()
 
 # Lazy initialization for model to avoid long loading times for window
 def initializeModel():
@@ -514,7 +526,7 @@ hosting_address = ctk.CTkEntry(
     fg_color="#0f141b",
     border_color="#263242",
     text_color="#e5e7eb",
-    state="readonly"
+    # state="readonly"
 )
 hosting_address.grid(row=4, column=0, columnspan=2, sticky="ew", pady=5,padx=5)   
 
@@ -526,7 +538,7 @@ hosting_port = ctk.CTkEntry(
     fg_color="#0f141b",
     border_color="#263242",
     text_color="#e5e7eb",
-    state="readonly"
+    # state="readonly"
 )
 hosting_port.grid(row=4, column=2, sticky="ew", pady=5,padx=5)   
 

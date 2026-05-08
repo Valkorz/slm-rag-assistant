@@ -59,12 +59,10 @@ def _tcp_request_handler(message: str) -> str:
     except Exception as exc:
         return f'{{"error": "{str(exc)}"}}'
     
-def _model_prompt_routine(user_question : str, lang : str, model_query : str, model_reason : str) -> str:
+def _model_prompt_routine(user_question : str, lang : str) -> str:
     question.delete(0, "end")
     question.insert(0, user_question)
     language_selector.set(lang)
-    model_selector_query.set(model_query)
-    model_selector_reasoning.set(model_reason)
     run_prompt()
 
 # Lazy initialization for model to avoid long loading times for window

@@ -102,9 +102,7 @@ class AssistantRequestSocket:
                     msg_json = self.parse_response(message)
                     response = self._model_prompt_routine_callback(
                             msg_json['question'],
-                            msg_json['lang'],
-                            msg_json['model_query'],
-                            msg_json['model_reason'])
+                            msg_json['lang'])
                     
                 except Exception as exc:
                     response = f'{{"error": "{str(exc)}"}}'

@@ -66,7 +66,19 @@ This project was created using `Python 3.12.6` and a list of libraries disclosed
 
     ![Source material](docs/images/source-material.png)
 
----
+5. **(OPTIONAL) Prompting the model through TCP commands:**
+    Additionally, you can operate the application through TCP commands, which are processed and the received data is appended to the interface. 
+    In order to start the TCP server for the application, you must flip the 'TCP' switch, as per shown in the following image:
+    ![Server activation switch](docs/images/tcp-switch.png)
+
+    The usage is done by sending a TCP packet to the open port using the following JSON format:
+
+    ```
+    {
+        "question":"your question",
+        "lang":"EN/PT"
+    }
+    ```
 
 ## ⚙️ Hardware
 

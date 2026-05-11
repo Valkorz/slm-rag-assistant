@@ -11,7 +11,7 @@ class AssistantRequestSocket:
 
     # Private
     _tcp_callback: Optional[Callable[[str], str]] = None 
-    _model_prompt_routine_callback: Optional[Callable[[str,str,str,str],str]]
+    _model_prompt_routine_callback: Optional[Callable[[str],str]]
     _server: Optional[asyncio.Server] = None
     _event_loop: Optional[asyncio.AbstractEventLoop] = None
 
@@ -27,6 +27,7 @@ class AssistantRequestSocket:
             return json.loads(data)
         except Exception as e:
             print(f"Error while parsing response: {str(e)}")
+            return {}
         
     def set_event_loop(self, loop: asyncio.AbstractEventLoop):
         self._event_loop = loop
@@ -41,7 +42,7 @@ class AssistantRequestSocket:
         self._tcp_callback = callback
 
     def set_prompt_callback(self, callback: Optional[Callable[[str,str,str,str],str]]):
-        self._model_prompt_callback = callback
+        self._model_prompt_routine_callback = callback
 
     async def start_listener(self):
         if self._server is not None:
@@ -85,12 +86,16 @@ class AssistantRequestSocket:
             data = await reader.read(4096)
             message = data.decode().strip()
             addr = writer.get_extra_info("peername")
-            # print(f"TCP request from {addr}: {message}")
+            print(f"TCP request from {addr}: {message}")
 
             response = '{"error": "No callback registered."}'
-
-            if self._tcp_callback and self._model_prompt_callback:
+         
+            if self._tcp_callback and self._model_prompt_routine_callback:
                 try:
+                    msg_json = self.parse_response(message)
+                    response = self._model_prompt_routine_callback(
+                            msg_json['question'])
+                    
                     loop = asyncio.get_running_loop()
                     result = await loop.run_in_executor(
                         None,
@@ -99,15 +104,10 @@ class AssistantRequestSocket:
                     )
                     response = result if isinstance(result, str) else str(result)
                     
-                    msg_json = self.parse_response(message)
-                    response = self._model_prompt_routine_callback(
-                            msg_json['question'],
-                            msg_json['lang'])
-                    
                 except Exception as exc:
                     response = f'{{"error": "{str(exc)}"}}'
             
-            writer.write(response)
+            writer.write(response.encode("utf-8") if isinstance(response, str) else response)
             await writer.drain()
 
         except Exception as exc:

@@ -75,8 +75,7 @@ This project was created using `Python 3.12.6` and a list of libraries disclosed
 
     ```
     {
-        "question":"your question",
-        "lang":"EN/PT"
+        "question":"your question"
     }
     ```
 

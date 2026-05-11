@@ -42,6 +42,7 @@ class Model:
 
     def set_language(self, lang : str):
         self._language = lang
+        self._instructions.set_language(lang=lang)
 
     def set_query_model(self, name : str):
         self._query_model = name
@@ -140,6 +141,7 @@ class Model:
     def _queryRecall(self, queries : list[str], n_results : int = 5) -> list[dict]:
         seen_ids = set()
         all_results = []
+        SCORE_MINIMUM = 0.6
         
         for query in queries:
             results = self._collection.query(query_texts=[query], n_results=3)
@@ -159,7 +161,7 @@ class Model:
                         }
                     )
         all_results.sort(key=lambda x: x["score"], reverse=True)
-        return all_results[:n_results]
+        return [r for r in all_results if r["score"] >= SCORE_MINIMUM]
     
     def _getQueries(self, user_question : str, score_treshold : float = 0.45) -> str:
         queries = self._queryMemories(user_question=user_question)
@@ -180,7 +182,8 @@ class Model:
         self.model_manager.load(model_name=self._reasoning_model)
         response = self.model_manager.create_completion(prompt=prompt)
         raw_text = response.get('choices', [{}])[0].get('text', '')
-        print("completion prompt: "+raw_text)
+        # print("completion prompt: "+raw_text)
+        raw_text = "{"+raw_text
 
         # For the love of God just parse
         parsed = None

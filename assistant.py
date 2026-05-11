@@ -59,10 +59,9 @@ def _tcp_request_handler(message: str) -> str:
     except Exception as exc:
         return f'{{"error": "{str(exc)}"}}'
     
-def _model_prompt_routine(user_question : str, lang : str) -> str:
+def _model_prompt_routine(user_question : str) -> str:
     question.delete(0, "end")
     question.insert(0, user_question)
-    language_selector.set(lang)
     run_prompt()
 
 # Lazy initialization for model to avoid long loading times for window
@@ -76,14 +75,12 @@ def initializeModel():
     except Exception as exc:
         root_window.after(0, lambda error_message=str(exc): _on_model_error(error_message))
 
-
 def _on_model_ready() -> None:
     button_prompt.configure(state="normal")
     model_selector_query.configure(values=downloaded_models)
     model_selector_reasoning.configure(values=downloaded_models)
     if initialize_dialog is not None:
         initialize_dialog.close("Model loaded")
-
 
 def _on_model_error(error_message: str) -> None:
     button_prompt.configure(state="disabled")
@@ -221,6 +218,8 @@ def run_prompt() -> None:
     loading_bar.grid(row=2, column=0, columnspan=3, sticky="ew", padx=20, pady=(8, 0))
     loading_bar.start()
 
+
+    model.model_manager.set_models_root_path(entry_models_folder.get())
     def worker() -> None:
         global model
         try:

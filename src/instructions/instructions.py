@@ -5,6 +5,12 @@ class Instructions:
     def __init__(self, lang: str):
         self._language = lang
 
+    def set_language(self, lang : str):
+        languages = ["EN", "PTBR"]
+        if not languages.__contains__(lang):
+            pass
+        self._language = lang
+
     def get_queryInstruction(self, n_queries: int, user_question: str) -> str:
         if self._language.upper() == "EN":
             return self._instQueries_EN(n_queries, user_question)

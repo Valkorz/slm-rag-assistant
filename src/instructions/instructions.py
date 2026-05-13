@@ -87,6 +87,9 @@ class Instructions:
             f"### TASK\n"
             f"Generate exactly {n_queries} short search queries to find information "
             f"that answers the question below.\n\n"
+            f"### CRITICAL LANGUAGE RULE\n"
+            f"ALL queries MUST be written in ENGLISH. "
+            f"No Spanish, Portuguese, French, or any other language. ENGLISH ONLY.\n\n"
             f"### OUTPUT FORMAT\n"
             f"Respond ONLY with a JSON object in this exact format:\n"
             f"{{\n"
@@ -95,12 +98,12 @@ class Instructions:
             f"}}\n\n"
             f"### QUERY RULES\n"
             f"- Each query must be 5-10 words.\n"
-            f"- Queries must be in the same language as the question.\n"
-            f"- Queries must be meaningfully different from each other.\n\n"
+            f"- Queries must be meaningfully different from each other.\n"
+            f"- Focus on the core concepts in the question, not the exact words.\n\n"
             f"### EXAMPLE\n"
             f"Question: What are the tax brackets for 2024?\n"
             f"{{\n"
-            f'  "queries": ["tax brackets 2024", "income tax rates federal", "IRS tax table current year"],\n'
+            f'  "queries": ["income tax brackets 2024 rates", "federal tax table thresholds", "IRS progressive tax bands"],\n'
             f'  "thought_process": "Searched for the brackets directly, then by rate type, then by the issuing authority."\n'
             f"}}\n\n"
             f"### YOUR TURN\n"
@@ -142,6 +145,9 @@ class Instructions:
             f"### TAREFA\n"
             f"Gere exatamente {n_queries} consultas de pesquisa curtas para encontrar "
             f"informações que respondam a pergunta abaixo.\n\n"
+            f"### REGRA CRÍTICA DE IDIOMA\n"
+            f"TODAS as consultas DEVEM ser escritas em PORTUGUÊS DO BRASIL. "
+            f"Nenhum espanhol, inglês, francês ou qualquer outro idioma. SOMENTE PORTUGUÊS.\n\n"
             f"### FORMATO DE SAÍDA\n"
             f"Responda APENAS com um objeto JSON neste formato exato:\n"
             f"{{\n"
@@ -150,18 +156,19 @@ class Instructions:
             f"}}\n\n"
             f"### REGRAS DAS CONSULTAS\n"
             f"- Cada consulta deve ter 5-10 palavras.\n"
-            f"- As consultas devem estar no mesmo idioma que a pergunta.\n"
-            f"- As consultas devem ser significativamente diferentes entre si.\n\n"
+            f"- As consultas devem ser significativamente diferentes entre si.\n"
+            f"- Foque nos conceitos centrais da pergunta, não nas palavras exatas.\n\n"
             f"### EXEMPLO\n"
             f"Pergunta: O que são os impostos no Brasil em 2024?\n"
             f"{{\n"
-            f'  "queries": ["impostos Brasil 2024", "alíquotas imposto de renda", "tabela fiscal ano atual"],\n'
-            f'  "thought_process": "Busquei diretamente pelos impostos, depois pelas alíquotas e por fim pela tabela oficial."\n'
+            f'  "queries": ["impostos brasileiros 2024 tipos alíquotas", "tabela imposto renda pessoa física", "obrigações tributárias contribuinte Brasil"],\n'
+            f'  "thought_process": "Busquei pelos impostos diretamente, depois pelas alíquotas e por fim pelas obrigações do contribuinte."\n'
             f"}}\n\n"
             f"### SUA VEZ\n"
             f"Pergunta: {user_question}\n"
             f"{{"
         )
+    
 
     def _instPrompt_PTBR(self, context: str, user_question: str) -> str:
         return (

@@ -96,13 +96,13 @@ class AssistantRequestSocket:
                     response = self._model_prompt_routine_callback(
                             msg_json['question'])
                     
-                    loop = asyncio.get_running_loop()
-                    result = await loop.run_in_executor(
-                        None,
-                        self._tcp_callback,
-                        message
-                    )
-                    response = result if isinstance(result, str) else str(result)
+                    # loop = asyncio.get_running_loop()
+                    # result = await loop.run_in_executor(
+                    #     None,
+                    #     self._tcp_callback,
+                    #     message
+                    # )
+                    # response = result if isinstance(result, str) else str(result)
                     
                 except Exception as exc:
                     response = f'{{"error": "{str(exc)}"}}'

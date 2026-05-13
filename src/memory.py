@@ -120,7 +120,7 @@ def pdf_ingest(collection: chromadb.Collection, pdf_path: str, source_name: Opti
     doc = pdf.open(pdf_path)
     splitter = RecursiveCharacterTextSplitter(chunk_size=512, chunk_overlap=64)
 
-    print("ingesting PDF...")
+    # print("ingesting PDF...")
     for page_num, page in enumerate(doc, start=1):
         page_text = page.get_text("text").strip()
         if not page_text:
@@ -133,7 +133,7 @@ def pdf_ingest(collection: chromadb.Collection, pdf_path: str, source_name: Opti
             valid     = is_valid_chunk(chunk)
 
             if not valid:
-                print(f"REJECTED [{density:.2f} / {diversity:.2f} / {avg_sent:.1f}]: {chunk[:80]}")
+                # print(f"REJECTED [{density:.2f} / {diversity:.2f} / {avg_sent:.1f}]: {chunk[:80]}")
                 continue
             
             store(

@@ -40,22 +40,39 @@ def on_host_toggled():
     if switch_tcp_toggle.get() == 1:
         hosting_port.insert(0, tcp_socket.port)
         hosting_address.insert(0, tcp_socket.host)
-        
-    tcp_socket.set_prompt_callback(_model_prompt_routine)    
+
     tcp_socket.toggle_sync(state=switch_tcp_toggle.get(), tcp_callback=_tcp_request_handler)
 
 def _tcp_request_handler(message: str) -> str:
+    global model
     try:
         if model is None:
-            return '{"error": "Model not loaded yet."}'
-        # answer = model.prompt(user_question=message)
-        # root_window.after(0, lambda: _finish_run(answer=answer))
-        # return answer if isinstance(answer, str) else str(answer)
-        # print(f"Received TCP message: {message}")
+            from src.model import Model
+            model = Model(query_count=5, 
+                            lang=language_selector.get(), 
+                            query_model=model_selector_query.get(),
+                            reason_model=model_selector_reasoning.get())
+        else: 
+            model.set_query_model(model_selector_query.get())
+            model.set_resoning_model(model_selector_reasoning.get())
+            model.set_language(language_selector.get())
 
         data = tcp_socket.parse_response(message)
-        print(f"Data received:{data['data']}")
-        return data['data']
+        user_question = data.get("question", "").strip()
+        if not user_question:
+            return '{"error": "Missing required field: question"}'
+
+        root_window.after(0, lambda: question.delete(0, "end"))
+        root_window.after(0, lambda: question.insert(0, user_question))
+
+        model.model_manager.set_models_root_path(entry_models_folder.get())
+
+        if files:
+            model.addPdfs(files)
+
+        answer = model.prompt(user_question=user_question)
+        root_window.after(0, lambda: _finish_run(answer=answer))
+        return answer if isinstance(answer, str) else json.dumps(answer)
     except Exception as exc:
         return f'{{"error": "{str(exc)}"}}'
     

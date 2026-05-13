@@ -13,3 +13,6 @@ langchain_text_splitters>=1.1.1
 pillow>=11.2.1
 customtkinter>=5.2.0
 
+# Networking
+aiohttp>=3.15.5
+

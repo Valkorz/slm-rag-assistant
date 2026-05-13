@@ -1,15 +1,22 @@
 # This class is used to define different instructions for different languages
 class Instructions:
     _language: str
+    _mode: str  # "document" | "financial"
 
-    def __init__(self, lang: str):
+    def __init__(self, lang: str, mode: str = "document"):
         self._language = lang
+        self._mode = mode
 
     def set_language(self, lang : str):
         languages = ["EN", "PTBR"]
         if not languages.__contains__(lang):
             pass
         self._language = lang
+
+    def set_mode(self, mode: str):
+        modes = ["document", "financial"]
+        if mode in modes:
+            self._mode = mode
 
     def get_queryInstruction(self, n_queries: int, user_question: str) -> str:
         if self._language.upper() == "EN":
@@ -20,12 +27,18 @@ class Instructions:
             return "AN ERROR OCCURED WITH THE REQUEST. PLEASE REPORT THIS."
 
     def get_promptInstruction(self, context: str, user_question: str) -> str:
-        if self._language.upper() == "EN":
-            return self._instPrompt_EN(context, user_question)
-        elif self._language.upper() == "PTBR":
-            return self._instPrompt_PTBR(context, user_question)
+        lang = self._language.upper()
+        if self._mode == "financial":
+            if lang == "EN":
+                return self._instPrompt_financial_EN(context, user_question)
+            elif lang == "PTBR":
+                return self._instPrompt_financial_PTBR(context, user_question)
         else:
-            return "AN ERROR OCCURED WITH THE REQUEST. PLEASE REPORT THIS."
+            if lang == "EN":
+                return self._instPrompt_EN(context, user_question)
+            elif lang == "PTBR":
+                return self._instPrompt_PTBR(context, user_question)
+        return "AN ERROR OCCURED WITH THE REQUEST. PLEASE REPORT THIS."
 
     def get_errSources(self) -> str:
         if self._language.upper() == "EN":
@@ -138,6 +151,44 @@ class Instructions:
     def _errSources_EN(self) -> str:
         return "Information not found within provided data."
 
+    def _instPrompt_financial_EN(self, context: str, user_question: str) -> str:
+        return (
+            f"### ROLE\n"
+            f"You are a tax consultant. Answer questions based on the provided sources, "
+            f"applying reasoning, calculations, and inferences from the data found.\n\n"
+            f"### OUTPUT FORMAT\n"
+            f"Respond ONLY with a JSON object in this exact format:\n"
+            f"{{\n"
+            f'  "answer": "your final answer here",\n'
+            f'  "sources": ["Source name p.X", "Source name p.Y"],\n'
+            f'  "thought_process": "your internal reasoning about which sources were used"\n'
+            f"}}\n\n"
+            f"### ANSWER RULES\n"
+            f"- Base your answer EXCLUSIVELY on information from the sources below.\n"
+            f"- YOU MUST reason, calculate, and infer from the source data "
+            f"(e.g., apply tax bracket tables, calculate tax owed for a specific income, "
+            f"deduce consequences of tax rules).\n"
+            f"- Use '{self._errSources_EN()}' ONLY if the TOPIC does not appear in any source. "
+            f"If the sources contain data that allows answering through reasoning, answer using that data.\n"
+            f"- The 'answer' field must be direct and complete — include the calculation or deduction when relevant.\n"
+            f"- The 'sources' field must list every source consulted.\n"
+            f"- The 'thought_process' field is for your internal reasoning only — it will not be shown to the user.\n\n"
+            f"### EXAMPLE\n"
+            f"Sources: [Source 1 | table.pdf p.3] Bracket $44,726 to $95,375: rate 22%, deduction $5,147\n"
+            f"Question: If I earn $60,000, how much income tax do I owe?\n"
+            f"{{\n"
+            f'  "answer": "With income of $60,000, you fall in the 22% bracket. '
+            f'Tax: $60,000 × 22% = $13,200, minus the $5,147 deduction = $8,053 owed.",\n'
+            f'  "sources": ["table.pdf p.3"],\n'
+            f'  "thought_process": "$60,000 falls in the $44,726–$95,375 bracket (22%). Applied rate and subtracted fixed deduction."\n'
+            f"}}\n\n"
+            f"### SOURCES\n"
+            f"{context}\n\n"
+            f"### QUESTION\n"
+            f"{user_question}\n\n"
+            f"{{"
+        )
+
     # ── Portuguese ────────────────────────────────────────────────────────────
 
     def _instQueries_PTBR(self, n_queries: int, user_question: str) -> str:
@@ -169,6 +220,44 @@ class Instructions:
             f"{{"
         )
     
+
+    def _instPrompt_financial_PTBR(self, context: str, user_question: str) -> str:
+        return (
+            f"### FUNÇÃO\n"
+            f"Você é um consultor tributário. Responda perguntas com base nas fontes fornecidas, "
+            f"aplicando raciocínio, cálculos e inferências a partir dos dados encontrados.\n\n"
+            f"### FORMATO DE SAÍDA\n"
+            f"Responda APENAS com um objeto JSON neste formato exato:\n"
+            f"{{\n"
+            f'  "answer": "sua resposta final aqui",\n'
+            f'  "sources": ["Nome da fonte p.X", "Nome da fonte p.Y"],\n'
+            f'  "thought_process": "seu raciocínio interno sobre quais fontes foram usadas"\n'
+            f"}}\n\n"
+            f"### REGRAS DA RESPOSTA\n"
+            f"- Baseie sua resposta EXCLUSIVAMENTE nas informações das fontes abaixo.\n"
+            f"- VOCÊ DEVE raciocinar, calcular e inferir a partir dos dados das fontes "
+            f"(ex: aplicar tabelas de alíquotas, calcular imposto sobre um valor específico, "
+            f"deduzir consequências de regras tributárias).\n"
+            f"- Use '{self._errSources_PTBR()}' SOMENTE se o ASSUNTO não aparecer em nenhuma fonte. "
+            f"Se as fontes contêm dados que permitem responder com raciocínio, responda usando esses dados.\n"
+            f"- O campo 'answer' deve ser direto e completo — inclua o cálculo ou dedução quando relevante.\n"
+            f"- O campo 'sources' deve listar todas as fontes consultadas.\n"
+            f"- O campo 'thought_process' é para seu raciocínio interno — não será exibido ao usuário.\n\n"
+            f"### EXEMPLO\n"
+            f"Fontes: [Fonte 1 | tabela.pdf p.3] Faixa de R$2.826,66 a R$3.751,05: alíquota 15%, dedução R$354,80\n"
+            f"Pergunta: Se eu recebo R$ 3.500, quanto pago de IR?\n"
+            f"{{\n"
+            f'  "answer": "Com renda de R$3.500,00, você está na faixa de 15%. '
+            f'O imposto é: R$3.500,00 × 15% = R$525,00, menos a dedução de R$354,80 = R$170,20 de IR mensal.",\n'
+            f'  "sources": ["tabela.pdf p.3"],\n'
+            f'  "thought_process": "O valor R$3.500 cai na faixa R$2.826,66–R$3.751,05 (15%). Apliquei alíquota e deduzi o valor fixo."\n'
+            f"}}\n\n"
+            f"### FONTES\n"
+            f"{context}\n\n"
+            f"### PERGUNTA\n"
+            f"{user_question}\n\n"
+            f"{{"
+        )
 
     def _instPrompt_PTBR(self, context: str, user_question: str) -> str:
         return (

@@ -9,7 +9,7 @@ if project_root not in sys.path:
 
 os.chdir(project_root)
 
-def save_config(root_model_path : str, previous_question : str, documents : list[str], language : str, model_query : str, model_reason : str) -> None:
+def save_config(root_model_path : str, previous_question : str, documents : list[dict], language : str, model_query : str, model_reason : str) -> None:
     json_obj = {
         "root_model_path":root_model_path,
         "previous_question":previous_question,

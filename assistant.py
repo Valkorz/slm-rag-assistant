@@ -34,6 +34,10 @@ _asyncio_thread.start()
 tcp_socket = AssistantRequestSocket(port=8008)
 tcp_socket.set_event_loop(_event_loop)
 
+def on_language_changed(choice: str) -> None:
+    if model is not None:
+        threading.Thread(target=lambda: model.set_language(choice), daemon=True).start()
+
 def on_host_toggled():
     hosting_port.delete(0,"end")
     hosting_address.delete(0,"end")
@@ -48,14 +52,16 @@ def _tcp_request_handler(message: str) -> str:
     try:
         if model is None:
             from src.model import Model
-            model = Model(query_count=5, 
-                            lang=language_selector.get(), 
+            model = Model(query_count=5,
+                            lang=language_selector.get(),
                             query_model=model_selector_query.get(),
-                            reason_model=model_selector_reasoning.get())
-        else: 
+                            reason_model=model_selector_reasoning.get(),
+                            mode=mode_selector.get().lower())
+        else:
             model.set_query_model(model_selector_query.get())
             model.set_resoning_model(model_selector_reasoning.get())
             model.set_language(language_selector.get())
+            model.set_mode(mode_selector.get().lower())
 
         data = tcp_socket.parse_response(message)
         user_question = data.get("question", "").strip()
@@ -67,19 +73,17 @@ def _tcp_request_handler(message: str) -> str:
 
         model.model_manager.set_models_root_path(entry_models_folder.get())
 
-        if files:
-            model.addPdfs(files)
+        ingest_files = _get_pdf_ingest_files()
+        if ingest_files:
+            model.addPdfs(ingest_files)
 
         answer = model.prompt(user_question=user_question)
         root_window.after(0, lambda: _finish_run(answer=answer))
         return answer if isinstance(answer, str) else json.dumps(answer)
+    except ValueError as exc:
+        return f'{{"error": "{str(exc)}"}}'
     except Exception as exc:
         return f'{{"error": "{str(exc)}"}}'
-    
-def _model_prompt_routine(user_question : str) -> str:
-    question.delete(0, "end")
-    question.insert(0, user_question)
-    run_prompt()
 
 # Lazy initialization for model to avoid long loading times for window
 def initializeModel():
@@ -158,14 +162,61 @@ def select_pdf() -> None:
         name = selected.split('/')[-1]
         files.append({
             'name': name,
-            'path': selected
+            'path': selected,
+            'metadata': ""
         })
         update_files_list()
+
+def _normalize_pdf_file(file_entry: dict) -> dict:
+    if isinstance(file_entry, str):
+        return {
+            'name': file_entry.split('/')[-1],
+            'path': file_entry,
+            'metadata': ''
+        }
+
+    return {
+        'name': file_entry.get('name', ''),
+        'path': file_entry.get('path', ''),
+        'metadata': file_entry.get('metadata', '') or ''
+    }
+
+def _sync_pdf_metadata(file_entry: dict, entry_widget: ctk.CTkEntry) -> None:
+    metadata = entry_widget.get().strip()
+    if len(metadata) > 15:
+        metadata = metadata[:15]
+        entry_widget.delete(0, "end")
+        entry_widget.insert(0, metadata)
+
+    file_entry['metadata'] = metadata
+
+def _get_pdf_ingest_files() -> list[dict]:
+    ingest_files = []
+    invalid_files = []
+
+    for file_entry in files:
+        normalized = _normalize_pdf_file(file_entry)
+        metadata = normalized['metadata'].strip()
+
+        if metadata and not 5 <= len(metadata) <= 15:
+            invalid_files.append(normalized['name'])
+            continue
+
+        if metadata:
+            normalized['metadata'] = metadata
+        else:
+            normalized.pop('metadata', None)
+
+        ingest_files.append(normalized)
+
+    if invalid_files:
+        raise ValueError(
+            "Metadata must be 5-15 characters for: " + ", ".join(invalid_files)
+        )
+
+    return ingest_files
             
 def update_files_list():
-    if len(files) == 0:
-        pass
-    
     for widget in files_list.winfo_children():
         widget.destroy()
 
@@ -181,6 +232,22 @@ def update_files_list():
         
         name_label = ctk.CTkLabel(file_frame, text=f['name'], text_color="#e5e7eb")
         name_label.pack(side="left")
+
+        metadata_entry = ctk.CTkEntry(
+            file_frame,
+            width=120,
+            height=30,
+            placeholder_text="metadata",
+            fg_color="#0f141b",
+            border_color="#263242",
+            text_color="#e5e7eb",
+        )
+        metadata_entry.insert(0, f.get('metadata', ''))
+        metadata_entry.bind(
+            "<KeyRelease>",
+            lambda event, file_entry=f, entry_widget=metadata_entry: _sync_pdf_metadata(file_entry, entry_widget)
+        )
+        metadata_entry.pack(side="right", padx=(8, 0))
 
         remove_btn = ctk.CTkButton(file_frame, text="X", 
                        text_color="#e5e7eb", 
@@ -242,21 +309,27 @@ def run_prompt() -> None:
         try:
             if model is None:
                 from src.model import Model
-                model = Model(query_count=5, 
-                              lang=language_selector.get(), 
+                model = Model(query_count=5,
+                              lang=language_selector.get(),
                               query_model=model_selector_query.get(),
-                              reason_model=model_selector_reasoning.get())
-            else: 
+                              reason_model=model_selector_reasoning.get(),
+                              mode=mode_selector.get().lower())
+            else:
                 model.set_query_model(model_selector_query.get())
                 model.set_resoning_model(model_selector_reasoning.get())
                 model.set_language(language_selector.get())
+                model.set_mode(mode_selector.get().lower())
 
-            if files:
-                model.addPdfs(files)
+            ingest_files = _get_pdf_ingest_files()
+            if ingest_files:
+                model.addPdfs(ingest_files)
 
             root_window.after(0, lambda: loading_status.configure(text="Generating response..."))
             answer = model.prompt(user_question=user_question)
             root_window.after(0, lambda: _finish_run(answer=answer))
+        except ValueError as exc:
+            error_message = str(exc)
+            root_window.after(0, lambda error_message=error_message: _finish_run(error=error_message))
         except Exception as exc:
             error_message = str(exc)
             root_window.after(0, lambda error_message=error_message: _finish_run(error=error_message))
@@ -417,7 +490,7 @@ actions_block = ctk.CTkFrame(
     border_color="#1f2937",
 )
 actions_block.grid(row=3, column=0, columnspan=2, sticky="ew", pady=(0, 14))
-actions_block.grid_columnconfigure((0, 1, 2), weight=1, uniform="group1")
+actions_block.grid_columnconfigure((0, 1, 2, 3), weight=1, uniform="group1")
 actions_block.grid_rowconfigure(0, weight=1)
 actions_block.grid_rowconfigure(1, weight=1)
 
@@ -432,6 +505,7 @@ label_language.grid(row=0, column=0, sticky="ew", padx=20, pady=5)
 language_selector = ctk.CTkOptionMenu(
 	actions_block,
 	values=["EN","PTBR"],
+	command=on_language_changed,
 	fg_color="#18202a",
 	button_color="#1f2937",
 	button_hover_color="#273549",
@@ -457,6 +531,14 @@ label_reasoning_model = ctk.CTkLabel(
 )
 label_reasoning_model.grid(row=0, column=2, sticky="ew", padx=20, pady=5)
 
+label_mode = ctk.CTkLabel(
+    actions_block,
+    text="Mode",
+    font=("Segoe UI Semibold", 12),
+    text_color="#bbc3d2",
+)
+label_mode.grid(row=0, column=3, sticky="ew", padx=20, pady=5)
+
 model_selector_query = ctk.CTkOptionMenu(
     actions_block,
     values=downloaded_models,
@@ -481,6 +563,18 @@ model_selector_reasoning = ctk.CTkOptionMenu(
 )
 model_selector_reasoning.grid(row=1, column=2, sticky="ew", padx=20, pady=5)
 
+mode_selector = ctk.CTkOptionMenu(
+    actions_block,
+    values=["Document", "Financial"],
+    fg_color="#18202a",
+    button_color="#1f2937",
+    button_hover_color="#273549",
+    dropdown_fg_color="#11151c",
+    corner_radius=10,
+    height=38,
+)
+mode_selector.grid(row=1, column=3, sticky="ew", padx=20, pady=5)
+
 button_prompt = ctk.CTkButton(
 	actions_block,
 	text="Run",
@@ -491,7 +585,7 @@ button_prompt = ctk.CTkButton(
 	hover_color="#1d4ed8",
     state="disabled",
 )
-button_prompt.grid(row=1, column=3, sticky="ew", pady=5)
+button_prompt.grid(row=2, column=3, sticky="ew", pady=5)
 
 entry_models_folder = ctk.CTkEntry(
     actions_block,
@@ -605,7 +699,8 @@ for file in list(Path("./data/").glob("*.pdf")):
     name = fstr.split('/')[-1]
     files.append({
         'name': name,
-        'path': fstr
+        'path': fstr,
+        'metadata': ""
     })
     update_files_list()
 
@@ -616,10 +711,11 @@ root_window.after(0, lambda: threading.Thread(target=initializeModel, daemon=Tru
 if config_json:
     entry_models_folder.delete(0,"end")
     entry_models_folder.insert(0, config_json['root_model_path'])
-    files = config_json['documents']
+    files = [_normalize_pdf_file(file_entry) for file_entry in config_json['documents']]
     language_selector.set(config_json['language'])
     model_selector_query.set(config_json['model_query'])
     model_selector_reasoning.set(config_json['model_reason'])
+    update_files_list()
 
 # Initialize window
 root_window.protocol("WM_DELETE_WINDOW", on_closing)

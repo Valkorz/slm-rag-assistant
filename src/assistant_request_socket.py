@@ -2,6 +2,7 @@ import asyncio
 import json
 from typing import Callable, Optional
 from aiohttp import web
+import aiohttp_cors
 
 class AssistantRequestSocket:
     #The user may use the functionalities of this application through HTTP requests.
@@ -102,7 +103,16 @@ class AssistantRequestSocket:
             return  # already running
 
         self._app = web.Application()
-        self._app.router.add_post('/', self._handle_request)
+
+        cors = aiohttp_cors.setup(self._app, defaults={
+            "*": aiohttp_cors.ResourceOptions(
+                allow_credentials=False,
+                expose_headers="*",
+                allow_headers="*",
+                allow_methods=["POST", "OPTIONS"],
+            )
+        })
+        cors.add(self._app.router.add_post('/', self._handle_request))
 
         self._runner = web.AppRunner(self._app)
         await self._runner.setup()

@@ -112,31 +112,37 @@ class Model:
         return self._extract_json_from_text(text)
 
     def _extract_json_from_text(self, text: str) -> dict:
-        candidates = []
+        print(f"Raw JSON: {text}")
 
-        # Strategy 1: fenced code blocks
+        candidates = []
+        stripped = text.strip()
+
+        # Strategy 1: fix missing brackets from prompt priming (unconditional, tried first)
+        # llama.cpp returns only the completion; the { that ends the prompt is never echoed back.
+        candidate = stripped
+        if candidate and not candidate.startswith("{"):
+            candidate = "{" + candidate
+        if candidate and not candidate.endswith("}"):
+            candidate = candidate + "}"
+        if candidate:
+            candidates.append(candidate)
+
+        # Strategy 2: fenced code blocks
         for m in re.finditer(r"```(?:json)?\s*([\s\S]*?)\s*```", text, re.IGNORECASE):
             candidates.append(m.group(1).strip())
 
-        # Strategy 2: balanced brace extraction
-        if not candidates:
-            starts = [m.start() for m in re.finditer(r"\{", text)]
-            for i in starts:
-                depth = 0
-                for j in range(i, len(text)):
-                    if text[j] == '{':
-                        depth += 1
-                    elif text[j] == '}':
-                        depth -= 1
-                        if depth == 0:
-                            candidates.append(text[i:j+1])
-                            break
-
-        # Strategy 3: model omitted the opening brace due to prompt priming
-        if not candidates:
-            stripped = text.strip()
-            if stripped and not stripped.startswith("{"):
-                candidates.append("{" + stripped)
+        # Strategy 3: balanced brace extraction
+        starts = [m.start() for m in re.finditer(r"\{", text)]
+        for i in starts:
+            depth = 0
+            for j in range(i, len(text)):
+                if text[j] == '{':
+                    depth += 1
+                elif text[j] == '}':
+                    depth -= 1
+                    if depth == 0:
+                        candidates.append(text[i:j+1])
+                        break
 
         # Strategy 4: direct parse of raw text as last resort
         candidates.append(text)
@@ -257,6 +263,8 @@ class Model:
 
     def prompt(self, user_question: str) -> str:
         context = self._getQueries(user_question=user_question)
+        print(f"Provided context: {context}")
+
         prompt_text = self._instructions.get_promptInstruction(
             context=context,
             user_question=user_question

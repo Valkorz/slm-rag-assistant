@@ -103,8 +103,13 @@ class Instructions:
             f"### CRITICAL LANGUAGE RULE\n"
             f"ALL queries MUST be written in ENGLISH. "
             f"No Spanish, Portuguese, French, or any other language. ENGLISH ONLY.\n\n"
-            f"### OUTPUT FORMAT\n"
-            f"Respond ONLY with a JSON object in this exact format:\n"
+            f"### OUTPUT FORMAT — STRICT\n"
+            f"Your ENTIRE response must be a single, valid JSON object.\n"
+            f"- Start with `{{` as the very first character. No text, greeting, or explanation before it.\n"
+            f"- End with `}}` as the very last character. No text, comment, or newline after it.\n"
+            f"- Do NOT wrap the JSON in markdown code blocks (no ``` or ```json).\n"
+            f"- Do NOT add any fields beyond those listed below.\n"
+            f"Required structure:\n"
             f"{{\n"
             f'  "queries": ["query 1", "query 2", "query 3"],\n'
             f'  "thought_process": "brief explanation of why you chose these queries"\n'
@@ -121,6 +126,7 @@ class Instructions:
             f"}}\n\n"
             f"### YOUR TURN\n"
             f"Question: {user_question}\n"
+            f"IMPORTANT: Begin your output with `{{` right now, with no preceding text.\n"
             f"{{"
         )
 
@@ -128,8 +134,13 @@ class Instructions:
         return (
             f"### ROLE\n"
             f"You are a document assistant. Answer questions exclusively from the provided sources.\n\n"
-            f"### OUTPUT FORMAT\n"
-            f"Respond ONLY with a JSON object in this exact format:\n"
+            f"### OUTPUT FORMAT — STRICT\n"
+            f"Your ENTIRE response must be a single, valid JSON object.\n"
+            f"- Start with `{{` as the very first character. No text, greeting, or explanation before it.\n"
+            f"- End with `}}` as the very last character. No text, comment, or newline after it.\n"
+            f"- Do NOT wrap the JSON in markdown code blocks (no ``` or ```json).\n"
+            f"- Do NOT add any fields beyond those listed below.\n"
+            f"Required structure:\n"
             f"{{\n"
             f'  "answer": "your final answer here",\n'
             f'  "sources": ["Source name p.X", "Source name p.Y"],\n'
@@ -145,6 +156,7 @@ class Instructions:
             f"{context}\n\n"
             f"### QUESTION\n"
             f"{user_question}\n\n"
+            f"IMPORTANT: Begin your output with `{{` right now, with no preceding text.\n"
             f"{{"
         )
 
@@ -156,8 +168,13 @@ class Instructions:
             f"### ROLE\n"
             f"You are a tax consultant. Answer questions based on the provided sources, "
             f"applying reasoning, calculations, and inferences from the data found.\n\n"
-            f"### OUTPUT FORMAT\n"
-            f"Respond ONLY with a JSON object in this exact format:\n"
+            f"### OUTPUT FORMAT — STRICT\n"
+            f"Your ENTIRE response must be a single, valid JSON object.\n"
+            f"- Start with `{{` as the very first character. No text, greeting, or explanation before it.\n"
+            f"- End with `}}` as the very last character. No text, comment, or newline after it.\n"
+            f"- Do NOT wrap the JSON in markdown code blocks (no ``` or ```json).\n"
+            f"- Do NOT add any fields beyond those listed below.\n"
+            f"Required structure:\n"
             f"{{\n"
             f'  "answer": "your final answer here",\n'
             f'  "sources": ["Source name p.X", "Source name p.Y"],\n'
@@ -186,6 +203,7 @@ class Instructions:
             f"{context}\n\n"
             f"### QUESTION\n"
             f"{user_question}\n\n"
+            f"IMPORTANT: Begin your output with `{{` right now, with no preceding text.\n"
             f"{{"
         )
 
@@ -199,8 +217,13 @@ class Instructions:
             f"### REGRA CRÍTICA DE IDIOMA\n"
             f"TODAS as consultas DEVEM ser escritas em PORTUGUÊS DO BRASIL. "
             f"Nenhum espanhol, inglês, francês ou qualquer outro idioma. SOMENTE PORTUGUÊS.\n\n"
-            f"### FORMATO DE SAÍDA\n"
-            f"Responda APENAS com um objeto JSON neste formato exato:\n"
+            f"### FORMATO DE SAÍDA — ESTRITO\n"
+            f"Sua resposta COMPLETA deve ser um único objeto JSON válido.\n"
+            f"- Comece com `{{` como o primeiro caractere. Nenhum texto, saudação ou explicação antes.\n"
+            f"- Termine com `}}` como o último caractere. Nenhum texto, comentário ou quebra de linha depois.\n"
+            f"- NÃO envolva o JSON em blocos de código markdown (sem ``` ou ```json).\n"
+            f"- NÃO adicione campos além dos listados abaixo.\n"
+            f"Estrutura obrigatória:\n"
             f"{{\n"
             f'  "queries": ["consulta 1", "consulta 2", "consulta 3"],\n'
             f'  "thought_process": "breve explicação de por que você escolheu essas consultas"\n'
@@ -226,8 +249,13 @@ class Instructions:
             f"### FUNÇÃO\n"
             f"Você é um consultor tributário. Responda perguntas com base nas fontes fornecidas, "
             f"aplicando raciocínio, cálculos e inferências a partir dos dados encontrados.\n\n"
-            f"### FORMATO DE SAÍDA\n"
-            f"Responda APENAS com um objeto JSON neste formato exato:\n"
+            f"### FORMATO DE SAÍDA — ESTRITO\n"
+            f"Sua resposta COMPLETA deve ser um único objeto JSON válido.\n"
+            f"- Comece com `{{` como o primeiro caractere. Nenhum texto, saudação ou explicação antes.\n"
+            f"- Termine com `}}` como o último caractere. Nenhum texto, comentário ou quebra de linha depois.\n"
+            f"- NÃO envolva o JSON em blocos de código markdown (sem ``` ou ```json).\n"
+            f"- NÃO adicione campos além dos listados abaixo.\n"
+            f"Estrutura obrigatória:\n"
             f"{{\n"
             f'  "answer": "sua resposta final aqui",\n'
             f'  "sources": ["Nome da fonte p.X", "Nome da fonte p.Y"],\n'
@@ -256,6 +284,7 @@ class Instructions:
             f"{context}\n\n"
             f"### PERGUNTA\n"
             f"{user_question}\n\n"
+            f"IMPORTANTE: Comece sua saída com `{{` agora, sem nenhum texto antes.\n"
             f"{{"
         )
 
@@ -263,8 +292,13 @@ class Instructions:
         return (
             f"### FUNÇÃO\n"
             f"Você é um assistente de documentos. Responda perguntas exclusivamente com base nas fontes fornecidas.\n\n"
-            f"### FORMATO DE SAÍDA\n"
-            f"Responda APENAS com um objeto JSON neste formato exato:\n"
+            f"### FORMATO DE SAÍDA — ESTRITO\n"
+            f"Sua resposta COMPLETA deve ser um único objeto JSON válido.\n"
+            f"- Comece com `{{` como o primeiro caractere. Nenhum texto, saudação ou explicação antes.\n"
+            f"- Termine com `}}` como o último caractere. Nenhum texto, comentário ou quebra de linha depois.\n"
+            f"- NÃO envolva o JSON em blocos de código markdown (sem ``` ou ```json).\n"
+            f"- NÃO adicione campos além dos listados abaixo.\n"
+            f"Estrutura obrigatória:\n"
             f"{{\n"
             f'  "answer": "sua resposta final aqui",\n'
             f'  "sources": ["Nome da fonte p.X", "Nome da fonte p.Y"],\n'
@@ -280,6 +314,7 @@ class Instructions:
             f"{context}\n\n"
             f"### PERGUNTA\n"
             f"{user_question}\n\n"
+            f"IMPORTANTE: Comece sua saída com `{{` agora, sem nenhum texto antes.\n"
             f"{{"
         )
 

@@ -9,6 +9,13 @@ if project_root not in sys.path:
 
 os.chdir(project_root)
 
+def _config_path() -> Path:
+    # When frozen by PyInstaller, write next to the executable.
+    # When running from source, write to the project root.
+    if getattr(sys, 'frozen', False):
+        return Path(os.path.dirname(sys.executable)) / "config.json"
+    return Path(__file__).resolve().parent.parent / "config.json"
+
 def save_config(root_model_path : str, previous_question : str, documents : list[dict], language : str, model_query : str, model_reason : str) -> None:
     json_obj = {
         "root_model_path":root_model_path,
@@ -19,18 +26,13 @@ def save_config(root_model_path : str, previous_question : str, documents : list
         "model_reason":model_reason
     }
 
-    config_path = Path("../config.json")
-    with open(config_path, 'w', encoding='utf-8') as file:
+    with open(_config_path(), 'w', encoding='utf-8') as file:
         file.write(json.dumps(json_obj))
-    pass
 
 def get_config() -> dict:
-    config_path = Path("../config.json")
+    config_path = _config_path()
     if not config_path.exists():
         return None
-    
-    json_str = ""
-    with open(config_path, 'r', encoding='utf-8') as file:
-        json_str = file.read()
 
-    return json.loads(json_str)
+    with open(config_path, 'r', encoding='utf-8') as file:
+        return json.loads(file.read())

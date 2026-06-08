@@ -10,6 +10,7 @@ from src.assistant_request_socket import AssistantRequestSocket
 import threading
 import json
 from src.dialog.model_class_initialize import ModelInitializeDialog
+from src.dialog.models_warning import ModelsWarningDialog
 
 ctk.set_appearance_mode("dark")
 ctk.set_default_color_theme("dark-blue")
@@ -91,6 +92,7 @@ def initializeModel():
     global model, downloaded_models
     try:
         model = Model(query_count=5)
+        model.model_manager.set_models_root_path(root_path=selected_models_folder)
         downloaded_models = get_downloaded_models()
         root_window.after(0, _on_model_ready)
     except Exception as exc:
@@ -126,30 +128,39 @@ def model_download(model_name : str):
     dialog.pack()
     pass
 
+def _apply_models_folder(path: str) -> None:
+    entry_models_folder.delete(0, "end")
+    entry_models_folder.insert(0, path)
+    model.model_manager.set_models_root_path(path)
+    new_models = model.model_manager.list_downloaded()
+    if not new_models:
+        new_models = [" "]
+    model_selector_query.configure(values=new_models)
+    model_selector_reasoning.configure(values=new_models)
+    model_selector_query.set(new_models[0])
+    model_selector_reasoning.set(new_models[0])
+
 def select_models_folder() -> None:
     selected = filedialog.askdirectory(
         title="Select models root folder"
     )
 
     if not selected:
-        pass
+        return
 
-    entry_models_folder.delete(0,"end")
-    entry_models_folder.insert(0, selected)
-    model.model_manager.set_models_root_path(selected)
-    selected_models_folder = selected
-    # print(f"downloaded models: {get_downloaded_models()}")
+    gguf_files = list(Path(selected).glob("*.gguf"))
+    if not gguf_files:
+        ModelsWarningDialog(root_window, on_folder_selected=_apply_models_folder)
+        return
 
-    downloaded_models = get_downloaded_models()
-    model_selector_query.configure(values=downloaded_models)
-    model_selector_reasoning.configure(values=downloaded_models)
-    model_selector_query.set(downloaded_models[0])
-    model_selector_reasoning.set(downloaded_models[0])
+    _apply_models_folder(selected)
 
 def get_downloaded_models() -> list[str]:
+    print(f"models folder: {selected_models_folder}")
     model_list = model.model_manager.list_downloaded()
     if not model_list or len(model_list) == 0:
         model_list = [" "]
+        root_window.after(0, lambda: ModelsWarningDialog(root_window, on_folder_selected=_apply_models_folder))
 
     return model_list
 
@@ -709,6 +720,7 @@ root_window.after(0, lambda: threading.Thread(target=initializeModel, daemon=Tru
 
 # Load config
 if config_json:
+    selected_models_folder = config_json['root_model_path']
     entry_models_folder.delete(0,"end")
     entry_models_folder.insert(0, config_json['root_model_path'])
     files = [_normalize_pdf_file(file_entry) for file_entry in config_json['documents']]

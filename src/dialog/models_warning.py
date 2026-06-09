@@ -50,8 +50,14 @@ class ModelsWarningDialog(tk.Toplevel):
         self.title("No models found")
         self.resizable(False, False)
         self.transient(parent)
-        self.grab_set()
-        self._build_warning_view()
+        self._build_warning_view() 
+        self.update_idletasks()
+        self.lift()
+        self.focus_force()
+        try:
+            self.grab_set()
+        except tk.TclError:
+            pass 
 
 
     def _clear(self):

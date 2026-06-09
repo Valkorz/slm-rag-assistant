@@ -129,10 +129,17 @@ def model_download(model_name : str):
     pass
 
 def _apply_models_folder(path: str) -> None:
+    global selected_models_folder
+    selected_models_folder = path
     entry_models_folder.delete(0, "end")
     entry_models_folder.insert(0, path)
-    model.model_manager.set_models_root_path(path)
-    new_models = model.model_manager.list_downloaded()
+
+    if model is not None:
+        model.model_manager.set_models_root_path(path)
+        new_models = model.model_manager.list_downloaded()
+    else:
+        new_models = [f.name for f in Path(path).rglob("*.gguf")]
+
     if not new_models:
         new_models = [" "]
     model_selector_query.configure(values=new_models)
@@ -148,7 +155,13 @@ def select_models_folder() -> None:
     if not selected:
         return
 
-    gguf_files = list(Path(selected).glob("*.gguf"))
+    # Update entry widget first — independent of model state.
+    entry_models_folder.delete(0, "end")
+    entry_models_folder.insert(0, selected)
+
+    # Check for GGUF files directly without going through the model manager,
+    # so the dialog always shows even if model failed to initialise.
+    gguf_files = list(Path(selected).rglob("*.gguf"))
     if not gguf_files:
         ModelsWarningDialog(root_window, on_folder_selected=_apply_models_folder)
         return
@@ -160,7 +173,7 @@ def get_downloaded_models() -> list[str]:
     model_list = model.model_manager.list_downloaded()
     if not model_list or len(model_list) == 0:
         model_list = [" "]
-        root_window.after(0, lambda: ModelsWarningDialog(root_window, on_folder_selected=_apply_models_folder))
+        root_window.after(600, lambda: ModelsWarningDialog(root_window, on_folder_selected=_apply_models_folder))
 
     return model_list
 

@@ -15,6 +15,8 @@ from src.dialog.model_class_initialize import ModelInitializeDialog
 from src.dialog.models_warning import ModelsWarningDialog
 from src.ui.slide_panel import SlidePanel
 
+from src.utils.logger import logger
+
 ctk.set_appearance_mode("dark")
 ctk.set_default_color_theme("dark-blue")
 

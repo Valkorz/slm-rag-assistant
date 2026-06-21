@@ -1,4 +1,5 @@
 from src.ui.app import AssistantApp
+from src.utils.logger import logger
 
 
 def main() -> None:

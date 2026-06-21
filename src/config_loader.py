@@ -16,14 +16,15 @@ def _config_path() -> Path:
         return Path(os.path.dirname(sys.executable)) / "config.json"
     return Path(__file__).resolve().parent.parent / "config.json"
 
-def save_config(root_model_path : str, previous_question : str, documents : list[dict], language : str, model_query : str, model_reason : str) -> None:
+def save_config(root_model_path : str, previous_question : str, documents : list[dict], language : str, model_query : str, model_reason : str, settings : dict = None) -> None:
     json_obj = {
         "root_model_path":root_model_path,
         "previous_question":previous_question,
         "documents":documents,
         "language":language,
         "model_query":model_query,
-        "model_reason":model_reason
+        "model_reason":model_reason,
+        "settings": settings or {}
     }
 
     with open(_config_path(), 'w', encoding='utf-8') as file:

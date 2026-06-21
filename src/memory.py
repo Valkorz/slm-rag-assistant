@@ -103,7 +103,7 @@ def avg_sentence_length(text: str) -> float:
         return 0.0
     return sum(len(s.split()) for s in sentences) / len(sentences)
 
-def is_valid_chunk(text: str) -> bool:
+def is_valid_chunk(text: str, min_density: float = 0.55, min_diversity: float = 0.40, min_avg_sentence: float = 5.0) -> bool:
     if len(text.split()) < 15:
         return False
 
@@ -111,9 +111,9 @@ def is_valid_chunk(text: str) -> bool:
     diversity = lexical_diversity(text)
     avg_sent  = avg_sentence_length(text)
 
-    if density   < 0.55: return False  # compresses too well = repetitive/empty
-    if diversity < 0.40: return False  # too many repeated words
-    if avg_sent  < 5.0:  return False  # sentence fragments, not prose
+    if density   < min_density:      return False  # compresses too well = repetitive/empty
+    if diversity < min_diversity:    return False  # too many repeated words
+    if avg_sent  < min_avg_sentence: return False  # sentence fragments, not prose
 
     return True
 
@@ -142,7 +142,8 @@ def recall(collection: chromadb.Collection, query: str, n_results: int = 5, wher
     ]
 
 # Receive and extract PDF content
-def pdf_ingest(collection: chromadb.Collection, pdf_path: str, source_name: Optional[str] = None, extra_metadata: Optional[dict] = None):
+def pdf_ingest(collection: chromadb.Collection, pdf_path: str, source_name: Optional[str] = None, extra_metadata: Optional[dict] = None,
+               min_density: float = 0.55, min_diversity: float = 0.40, min_avg_sentence: float = 5.0):
     source   = source_name or pdf_path
     doc      = pdf.open(pdf_path)
     splitter = RecursiveCharacterTextSplitter(chunk_size=512, chunk_overlap=64)
@@ -154,7 +155,7 @@ def pdf_ingest(collection: chromadb.Collection, pdf_path: str, source_name: Opti
         for chunk_idx, chunk in enumerate(splitter.split_text(page_text)):
             chunk_id = hashlib.md5(f"{source}::{page_num}::{chunk_idx}".encode()).hexdigest()
 
-            if not is_valid_chunk(chunk):
+            if not is_valid_chunk(chunk, min_density=min_density, min_diversity=min_diversity, min_avg_sentence=min_avg_sentence):
                 continue
 
             metadata = {

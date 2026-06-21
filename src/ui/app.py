@@ -23,6 +23,15 @@ PDF_ICON_PATH = "images/pdf.png"
 TCP_PORT = 8008
 QUESTION_PLACEHOLDER = "Write your question here..."
 
+# Generation / retrieval defaults 
+DEFAULT_TEMPERATURE = 0.1          # reasoning model answer temperature
+DEFAULT_QUERY_COUNT = 5            # number of search queries generated per question
+DEFAULT_QUERY_TEMPERATURE = 0.1    # temperature for the query-generation step
+DEFAULT_SCORE_MINIMUM = 0.6        # minimum retrieval score to keep a chunk
+DEFAULT_CHUNK_DENSITY = 0.55       # is_valid_chunk: min information density
+DEFAULT_CHUNK_DIVERSITY = 0.40     # is_valid_chunk: min lexical diversity
+DEFAULT_CHUNK_AVG_SENT = 5.0       # is_valid_chunk: min average sentence length
+
 
 class AssistantApp(ctk.CTk):
     def __init__(self):
@@ -334,18 +343,15 @@ class AssistantApp(ctk.CTk):
         self.response_content.configure(state="disabled")
 
     def _build_actions_section(self) -> None:
-        """Selectors (language/models/mode), run button, models folder, TCP host."""
-        actions_block = ctk.CTkFrame(
+        actions_block = ctk.CTkScrollableFrame(
             self.slide_panel.body,
             corner_radius=18,
             fg_color=theme.BG_CARD,
-            height=50,
             border_width=1,
             border_color=theme.BG_CARD_BORDER,
         )
-        actions_block.grid_columnconfigure(0, weight=1, uniform="group1")
-        actions_block.grid_rowconfigure((0,1,2,3,4,5,6,7,8,9,10,11,12,13), weight=1)
-        actions_block.pack()
+        actions_block.pack(fill="both", expand=True, padx=4, pady=4)
+        actions_block.grid_columnconfigure(0, weight=1)
 
         label_language = ctk.CTkLabel(actions_block, text="Language", font=theme.FONT_LABEL, text_color=theme.TEXT_MUTED)
         label_language.grid(row=0, sticky="ew", padx=20, pady=5)
@@ -408,6 +414,22 @@ class AssistantApp(ctk.CTk):
         )
         self.mode_selector.grid(row=7, sticky="ew", padx=20, pady=5)
 
+        # Tunable generation / retrieval settings
+        self.temperature_slider = self._make_slider(
+            actions_block, 8, "Temperature", from_=0.0, to=1.0, steps=20, default=DEFAULT_TEMPERATURE)
+        self.query_count_slider = self._make_slider(
+            actions_block, 10, "Query count", from_=1, to=10, steps=9, default=DEFAULT_QUERY_COUNT, fmt="{:.0f}")
+        self.query_temperature_slider = self._make_slider(
+            actions_block, 12, "Query gen. temperature", from_=0.0, to=1.0, steps=20, default=DEFAULT_QUERY_TEMPERATURE)
+        self.score_minimum_slider = self._make_slider(
+            actions_block, 14, "Min. query score", from_=0.0, to=1.0, steps=20, default=DEFAULT_SCORE_MINIMUM)
+        self.chunk_density_slider = self._make_slider(
+            actions_block, 16, "Chunk min. density", from_=0.0, to=1.0, steps=20, default=DEFAULT_CHUNK_DENSITY)
+        self.chunk_diversity_slider = self._make_slider(
+            actions_block, 18, "Chunk min. diversity", from_=0.0, to=1.0, steps=20, default=DEFAULT_CHUNK_DIVERSITY)
+        self.chunk_avg_sent_slider = self._make_slider(
+            actions_block, 20, "Chunk min. avg. sentence", from_=0.0, to=20.0, steps=40, default=DEFAULT_CHUNK_AVG_SENT, fmt="{:.1f}")
+
         # Created but only shown on demand (loading bar is gridded in run_prompt).
         self.loading_status = ctk.CTkLabel(actions_block, text="", text_color=theme.TEXT_FAINT, anchor="w")
         self.loading_bar = ctk.CTkProgressBar(actions_block, mode="indeterminate", progress_color=theme.ACCENT_HOVER)
@@ -421,7 +443,7 @@ class AssistantApp(ctk.CTk):
             border_color=theme.FIELD_BORDER,
             text_color=theme.TEXT_PRIMARY,
         )
-        self.hosting_address.grid(row=11, columnspan=2, sticky="ew", pady=5, padx=5)
+        self.hosting_address.grid(row=22, sticky="ew", pady=5, padx=5)
 
         self.hosting_port = ctk.CTkEntry(
             actions_block,
@@ -432,10 +454,62 @@ class AssistantApp(ctk.CTk):
             border_color=theme.FIELD_BORDER,
             text_color=theme.TEXT_PRIMARY,
         )
-        self.hosting_port.grid(row=12, sticky="ew", pady=5, padx=5)
+        self.hosting_port.grid(row=23, sticky="ew", pady=5, padx=5)
 
         self.switch_tcp_toggle = ctk.CTkSwitch(actions_block, text="TCP", command=self.on_host_toggled)
-        self.switch_tcp_toggle.grid(row=13, sticky="ew", pady=5, padx=5)
+        self.switch_tcp_toggle.grid(row=24, sticky="ew", pady=5, padx=5)
+
+    def _make_slider(self, parent, row: int, label_text: str, *, from_: float, to: float,
+                     steps: int, default: float, fmt: str = "{:.2f}") -> ctk.CTkSlider:
+        """Add a labelled slider (label on ``row``, slider on ``row + 1``).
+
+        The label shows the live value; returns the slider so callers can read it.
+        """
+        label = ctk.CTkLabel(parent, text=f"{label_text}: {fmt.format(default)}",
+                             font=theme.FONT_LABEL, text_color=theme.TEXT_MUTED)
+        label.grid(row=row, sticky="ew", padx=20, pady=(8, 0))
+
+        def update_label(value) -> None:
+            label.configure(text=f"{label_text}: {fmt.format(float(value))}")
+
+        slider = ctk.CTkSlider(
+            parent,
+            from_=from_,
+            to=to,
+            number_of_steps=steps,
+            button_color=theme.ACCENT,
+            button_hover_color=theme.ACCENT_HOVER,
+            progress_color=theme.ACCENT,
+            command=update_label,
+        )
+        slider.set(default)
+        slider.grid(row=row + 1, sticky="ew", padx=20, pady=(0, 6))
+        slider._update_label = update_label  # let _set_slider refresh the text on config restore
+        return slider
+
+    # ------------------------------------------------------------------ #
+    # Settings accessors (read current widget values for the model)
+    # ------------------------------------------------------------------ #
+    def _get_temperature(self) -> float:
+        return float(self.temperature_slider.get())
+
+    def _get_query_count(self) -> int:
+        return int(round(self.query_count_slider.get()))
+
+    def _get_query_temperature(self) -> float:
+        return float(self.query_temperature_slider.get())
+
+    def _get_score_minimum(self) -> float:
+        return float(self.score_minimum_slider.get())
+
+    def _get_chunk_density(self) -> float:
+        return float(self.chunk_density_slider.get())
+
+    def _get_chunk_diversity(self) -> float:
+        return float(self.chunk_diversity_slider.get())
+
+    def _get_chunk_avg_sentence(self) -> float:
+        return float(self.chunk_avg_sent_slider.get())
 
     # ------------------------------------------------------------------ #
     # TCP socket (serve requests from outside the UI)
@@ -467,16 +541,27 @@ class AssistantApp(ctk.CTk):
         try:
             if self.model is None:
                 from src.model import Model
-                self.model = Model(query_count=5,
+                self.model = Model(query_count=self._get_query_count(),
                                    lang=self.language_selector.get(),
                                    query_model=self.model_selector_query.get(),
                                    reason_model=self.model_selector_reasoning.get(),
-                                   mode=self.mode_selector.get().lower())
+                                   mode=self.mode_selector.get().lower(),
+                                   temperature=self._get_temperature(),
+                                   query_temperature=self._get_query_temperature(),
+                                   score_minimum=self._get_score_minimum(),
+                                   chunk_min_density=self._get_chunk_density(),
+                                   chunk_min_diversity=self._get_chunk_diversity(),
+                                   chunk_min_avg_sentence=self._get_chunk_avg_sentence())
             else:
                 self.model.set_query_model(self.model_selector_query.get())
                 self.model.set_resoning_model(self.model_selector_reasoning.get())
                 self.model.set_language(self.language_selector.get())
                 self.model.set_mode(self.mode_selector.get().lower())
+                self.model.set_temperature(self._get_temperature())
+                self.model.set_query_count(self._get_query_count())
+                self.model.set_query_temperature(self._get_query_temperature())
+                self.model.set_score_minimum(self._get_score_minimum())
+                self.model.set_chunk_validation(self._get_chunk_density(), self._get_chunk_diversity(), self._get_chunk_avg_sentence())
 
             data = self.tcp_socket.parse_response(message)
             user_question = data.get("question", "").strip()
@@ -664,9 +749,6 @@ class AssistantApp(ctk.CTk):
         self.loading_bar.grid(row=2, column=0, columnspan=3, sticky="ew", padx=20, pady=(8, 0))
         self.loading_bar.start()
 
-        # First Send click: show the one-time initialization dialog while the
-        # model dependencies import and the model loads. Both happen off the main
-        # thread (in worker) so the window stays responsive during the long load.
         if self.model is None and not self._init_dialog_shown:
             self.initialize_dialog = ModelInitializeDialog(self)
             self._init_dialog_shown = True
@@ -675,11 +757,17 @@ class AssistantApp(ctk.CTk):
             try:
                 if self.model is None:
                     from src.model import Model
-                    self.model = Model(query_count=5,
+                    self.model = Model(query_count=self._get_query_count(),
                                        lang=self.language_selector.get(),
                                        query_model=self.model_selector_query.get(),
                                        reason_model=self.model_selector_reasoning.get(),
-                                       mode=self.mode_selector.get().lower())
+                                       mode=self.mode_selector.get().lower(),
+                                       temperature=self._get_temperature(),
+                                       query_temperature=self._get_query_temperature(),
+                                       score_minimum=self._get_score_minimum(),
+                                       chunk_min_density=self._get_chunk_density(),
+                                       chunk_min_diversity=self._get_chunk_diversity(),
+                                       chunk_min_avg_sentence=self._get_chunk_avg_sentence())
                     self.model.model_manager.set_models_root_path(self.entry_models_folder.get())
                     self.after(0, self._on_model_ready)
                 else:
@@ -688,6 +776,11 @@ class AssistantApp(ctk.CTk):
                     self.model.set_resoning_model(self.model_selector_reasoning.get())
                     self.model.set_language(self.language_selector.get())
                     self.model.set_mode(self.mode_selector.get().lower())
+                    self.model.set_temperature(self._get_temperature())
+                    self.model.set_query_count(self._get_query_count())
+                    self.model.set_query_temperature(self._get_query_temperature())
+                    self.model.set_score_minimum(self._get_score_minimum())
+                    self.model.set_chunk_validation(self._get_chunk_density(), self._get_chunk_diversity(), self._get_chunk_avg_sentence())
 
                 ingest_files = collect_ingest_files(self.files)
                 if ingest_files:
@@ -711,7 +804,6 @@ class AssistantApp(ctk.CTk):
         self.loading_status.configure(text="")
         self.button_prompt.configure(state="normal", text="Send")
         if error:
-            # A still-open dialog means the first model load failed.
             if self.initialize_dialog is not None:
                 self.initialize_dialog.fail(f"Model load failed: {error}")
                 self.initialize_dialog = None
@@ -741,6 +833,11 @@ class AssistantApp(ctk.CTk):
     # ------------------------------------------------------------------ #
     # Config persistence
     # ------------------------------------------------------------------ #
+    def _set_slider(self, slider: ctk.CTkSlider, value: float) -> None:
+        """Set a slider's value and refresh its label (``set`` skips the command)."""
+        slider.set(value)
+        slider._update_label(value)
+
     def _apply_saved_config(self) -> None:
         config_json = get_config()
         if not config_json:
@@ -756,6 +853,16 @@ class AssistantApp(ctk.CTk):
         self.update_files_list()
         self._apply_models_folder(config_json['root_model_path'])
 
+        # Tunable generation / retrieval settings 
+        settings = config_json.get('settings', {})
+        self._set_slider(self.temperature_slider, settings.get('temperature', DEFAULT_TEMPERATURE))
+        self._set_slider(self.query_count_slider, settings.get('query_count', DEFAULT_QUERY_COUNT))
+        self._set_slider(self.query_temperature_slider, settings.get('query_temperature', DEFAULT_QUERY_TEMPERATURE))
+        self._set_slider(self.score_minimum_slider, settings.get('score_minimum', DEFAULT_SCORE_MINIMUM))
+        self._set_slider(self.chunk_density_slider, settings.get('chunk_density', DEFAULT_CHUNK_DENSITY))
+        self._set_slider(self.chunk_diversity_slider, settings.get('chunk_diversity', DEFAULT_CHUNK_DIVERSITY))
+        self._set_slider(self.chunk_avg_sent_slider, settings.get('chunk_avg_sentence', DEFAULT_CHUNK_AVG_SENT))
+
     def _on_closing(self) -> None:
         print("Encerrando aplicativo...")
         save_config(
@@ -764,5 +871,14 @@ class AssistantApp(ctk.CTk):
             documents=self.files,
             language=self.language_selector.get(),
             model_query=self.model_selector_query.get(),
-            model_reason=self.model_selector_reasoning.get())
+            model_reason=self.model_selector_reasoning.get(),
+            settings={
+                "temperature": self._get_temperature(),
+                "query_count": self._get_query_count(),
+                "query_temperature": self._get_query_temperature(),
+                "score_minimum": self._get_score_minimum(),
+                "chunk_density": self._get_chunk_density(),
+                "chunk_diversity": self._get_chunk_diversity(),
+                "chunk_avg_sentence": self._get_chunk_avg_sentence(),
+            })
         self.destroy()

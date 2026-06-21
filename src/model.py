@@ -20,16 +20,22 @@ class Model:
     
     _query_count        : int
     
-    #Model settings     
+    #Model settings
     _query_model        : str
     _reasoning_model    : str
+    _temperature        : float
+    _query_temperature  : float
+    _score_minimum      : float
+    _chunk_min_density   : float
+    _chunk_min_diversity : float
+    _chunk_min_avg_sentence : float
 
     # Common Spanish/English words that shouldn't appear in PT queries and vice versa
     _SPANISH_MARKERS = {"impuesto", "año", "también", "según", "más", "están", "será", "para"}
     _ENGLISH_MARKERS = {"the", "and", "for", "with", "income", "federal", "tax", "rate"}
     _PT_MARKERS      = {"imposto", "renda", "alíquota", "declaração", "contribuinte", "tabela"}
 
-    def __init__(self, query_count : int, lang : str = "EN", query_model : str = "deepseek-r1-distill-qwen-1.5b", reason_model : str = "meta-llama-3.1-8b-instruct", mode: str = "document"):
+    def __init__(self, query_count : int, lang : str = "EN", query_model : str = "deepseek-r1-distill-qwen-1.5b", reason_model : str = "meta-llama-3.1-8b-instruct", mode: str = "document", temperature: float = 0.1, query_temperature: float = 0.1, score_minimum: float = 0.6, chunk_min_density: float = 0.55, chunk_min_diversity: float = 0.40, chunk_min_avg_sentence: float = 5.0):
         self._query_count = query_count
         self._language = lang
         self._files = []
@@ -37,6 +43,12 @@ class Model:
         self._collection = get_collection(lang=lang)
         self._query_model = query_model
         self._reasoning_model = reason_model
+        self._temperature = temperature
+        self._query_temperature = query_temperature
+        self._score_minimum = score_minimum
+        self._chunk_min_density = chunk_min_density
+        self._chunk_min_diversity = chunk_min_diversity
+        self._chunk_min_avg_sentence = chunk_min_avg_sentence
         # self._client = OpenAI(base_url=f"http://127.0.0.1:1234/v1", api_key="")
         self.model_manager = ModelManager()
 
@@ -60,11 +72,31 @@ class Model:
     def set_mode(self, mode: str):
         self._instructions.set_mode(mode)
 
+    def set_temperature(self, temperature: float):
+        self._temperature = temperature
+
+    def set_query_count(self, query_count: int):
+        self._query_count = query_count
+
+    def set_query_temperature(self, temperature: float):
+        self._query_temperature = temperature
+
+    def set_score_minimum(self, score_minimum: float):
+        self._score_minimum = score_minimum
+
+    def set_chunk_validation(self, min_density: float, min_diversity: float, min_avg_sentence: float):
+        self._chunk_min_density = min_density
+        self._chunk_min_diversity = min_diversity
+        self._chunk_min_avg_sentence = min_avg_sentence
+
     def _loadPdfs(self):
         data_path = Path(__file__).resolve().parent.parent / "data"
         pdf_files = sorted(data_path.glob("*.pdf"))
         for pdf_file in pdf_files:
-            pdf_ingest(self._collection, str(pdf_file), pdf_file.name)
+            pdf_ingest(self._collection, str(pdf_file), pdf_file.name,
+                       min_density=self._chunk_min_density,
+                       min_diversity=self._chunk_min_diversity,
+                       min_avg_sentence=self._chunk_min_avg_sentence)
             self._files.append(pdf_file.name)
 
     def addPdfs(self, pdf_files : list[dict]):
@@ -80,6 +112,9 @@ class Model:
                 str(pdf_file['path']),
                 pdf_file['name'],
                 extra_metadata=extra_metadata,
+                min_density=self._chunk_min_density,
+                min_diversity=self._chunk_min_diversity,
+                min_avg_sentence=self._chunk_min_avg_sentence,
             )
             self._files.append(pdf_file['name'])
 
@@ -186,7 +221,7 @@ class Model:
             user_question=user_question
         )
         self.model_manager.load(model_name=self._query_model)
-        raw = self.model_manager.create_completion(prompt=instruction)['choices'][0]['text']
+        raw = self.model_manager.create_completion(prompt=instruction, temperature=self._query_temperature)['choices'][0]['text']
 
         try:
             parsed = self._extract_json_from_text(raw)
@@ -223,7 +258,6 @@ class Model:
     def _queryRecall(self, queries : list[str], n_results : int = 5, doc_type: str = None) -> list[dict]:
         seen_ids = set()
         all_results = []
-        SCORE_MINIMUM = 0.6
 
         where = { "type": doc_type } if doc_type else None
         
@@ -245,7 +279,7 @@ class Model:
                         }
                     )
         all_results.sort(key=lambda x: x["score"], reverse=True)
-        return [r for r in all_results if r["score"] >= SCORE_MINIMUM]
+        return [r for r in all_results if r["score"] >= self._score_minimum]
     
     # Base context assembler
     def _build_context(self, queries: list[str]) -> str:
@@ -270,7 +304,7 @@ class Model:
             user_question=user_question
         )
         self.model_manager.load(model_name=self._reasoning_model)
-        raw = self.model_manager.create_completion(prompt=prompt_text)
+        raw = self.model_manager.create_completion(prompt=prompt_text, temperature=self._temperature)
         raw_text = raw.get('choices', [{}])[0].get('text', '')
         print(f"Response: \n{raw_text}")
     

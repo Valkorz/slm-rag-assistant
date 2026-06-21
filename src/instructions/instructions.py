@@ -1,7 +1,7 @@
 # This class is used to define different instructions for different languages
 class Instructions:
     _language: str
-    _mode: str  # "document" | "financial"
+    _mode: str  # "document" | "Adaptive"
 
     def __init__(self, lang: str, mode: str = "document"):
         self._language = lang
@@ -14,7 +14,7 @@ class Instructions:
         self._language = lang
 
     def set_mode(self, mode: str):
-        modes = ["document", "financial"]
+        modes = ["Exact", "Adaptive"]
         if mode in modes:
             self._mode = mode
 
@@ -28,11 +28,11 @@ class Instructions:
 
     def get_promptInstruction(self, context: str, user_question: str) -> str:
         lang = self._language.upper()
-        if self._mode == "financial":
+        if self._mode == "Adaptive":
             if lang == "EN":
-                return self._instPrompt_financial_EN(context, user_question)
+                return self._instPrompt_Adaptive_EN(context, user_question)
             elif lang == "PTBR":
-                return self._instPrompt_financial_PTBR(context, user_question)
+                return self._instPrompt_Adaptive_PTBR(context, user_question)
         else:
             if lang == "EN":
                 return self._instPrompt_EN(context, user_question)
@@ -163,7 +163,7 @@ class Instructions:
     def _errSources_EN(self) -> str:
         return "Information not found within provided data."
 
-    def _instPrompt_financial_EN(self, context: str, user_question: str) -> str:
+    def _instPrompt_Adaptive_EN(self, context: str, user_question: str) -> str:
         return (
             f"### ROLE\n"
             f"You are a tax consultant. Answer questions based on the provided sources, "
@@ -244,7 +244,7 @@ class Instructions:
         )
     
 
-    def _instPrompt_financial_PTBR(self, context: str, user_question: str) -> str:
+    def _instPrompt_Adaptive_PTBR(self, context: str, user_question: str) -> str:
         return (
             f"### FUNÇÃO\n"
             f"Você é um consultor tributário. Responda perguntas com base nas fontes fornecidas, "

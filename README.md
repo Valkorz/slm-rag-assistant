@@ -191,7 +191,7 @@ This block, along with the original question, is injected into a prompt for the 
 | `sources` | List of source citations used. |
 | `thought_process` | Internal chain-of-thought (hidden from the user). |
 
-Two prompt modes are available: **Document** (factual extraction, no invention allowed) and **Financial** (allows arithmetic and inference from tabular source data, e.g. applying a tax bracket table to a specific income).
+Two prompt modes are available: **Document** (factual extraction, no invention allowed) and **Adaptive** (allows arithmetic and inference from tabular source data, e.g. applying a tax bracket table to a specific income).
 
 #### JSON recovery
 

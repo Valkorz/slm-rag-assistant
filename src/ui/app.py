@@ -13,6 +13,7 @@ from src.assistant_request_socket import AssistantRequestSocket
 from src.pdf_files import normalize_pdf_file, collect_ingest_files, load_pdfs_from_folder
 from src.dialog.model_class_initialize import ModelInitializeDialog
 from src.dialog.models_warning import ModelsWarningDialog
+from src.ui.slide_panel import SlidePanel
 
 ctk.set_appearance_mode("dark")
 ctk.set_default_color_theme("dark-blue")
@@ -20,6 +21,7 @@ ctk.set_default_color_theme("dark-blue")
 DATA_FOLDER = "./data/"
 PDF_ICON_PATH = "images/pdf.png"
 TCP_PORT = 8008
+QUESTION_PLACEHOLDER = "Write your question here..."
 
 
 class AssistantApp(ctk.CTk):
@@ -31,6 +33,7 @@ class AssistantApp(ctk.CTk):
         self.downloaded_models = ["None"]
         self.model = None
         self.initialize_dialog = None
+        self._init_dialog_shown = False  # init dialog is shown only on the first Send
         self.selected_models_folder = ""
 
         self._build_window()
@@ -38,7 +41,6 @@ class AssistantApp(ctk.CTk):
         self._build_layout()
 
         self._load_initial_files()
-        self._start_model_initialization()
         self._apply_saved_config()
 
         self.protocol("WM_DELETE_WINDOW", self._on_closing)
@@ -56,10 +58,12 @@ class AssistantApp(ctk.CTk):
 
     def _build_layout(self) -> None:
         self._build_scroll_container()
+        self._build_slide_panel()
         self._build_header()
         self._build_files_section()
         self._build_message_section()
         self._build_actions_section()
+        self._build_floating_toggle()
 
     def _build_scroll_container(self) -> None:
         page_canvas = tk.Canvas(self, highlightthickness=0, bg=theme.BG_PAGE)
@@ -90,6 +94,24 @@ class AssistantApp(ctk.CTk):
         self.main_container.grid_columnconfigure(1, weight=1)
         self.main_container.grid_rowconfigure(2, weight=0)
 
+    def _build_slide_panel(self) -> None:
+        self.slide_panel = SlidePanel(
+            self,
+            side="right",
+            width=0.30,
+            title="Settings",
+            fg_color=theme.BG_CARD,
+            border_width=1,
+            border_color=theme.BG_CARD_BORDER,
+            corner_radius=0,
+        )
+
+        # ctk.CTkLabel(
+        #     self.slide_panel.body,
+        #     text="Add panel content here",
+        #     text_color=theme.TEXT_FAINT,
+        # ).pack(pady=20)
+
     def _build_header(self) -> None:
         header_card = ctk.CTkFrame(
             self.main_container,
@@ -107,6 +129,27 @@ class AssistantApp(ctk.CTk):
             text_color=theme.TEXT_PRIMARY,
         )
         label_title.pack(anchor="w", padx=20, pady=(16, 4))
+
+    def _build_floating_toggle(self) -> None:
+        """Drawer toggle pinned to the window so it stays put while content scrolls.
+
+        Placed on the root window (not inside the scrollable canvas), so it keeps
+        its top-right screen position regardless of how far the page is scrolled.
+        """
+        self.panel_toggle_button = ctk.CTkButton(
+            self,
+            text="⚙️",
+            width=44,
+            height=44,
+            corner_radius=10,
+            font=("Segoe UI", 20),
+            fg_color=theme.ACCENT,
+            hover_color=theme.ACCENT_HOVER,
+            command=self.slide_panel.toggle,
+        )
+        # relx=1.0 keeps it glued to the right edge; the x offset clears the scrollbar.
+        self.panel_toggle_button.place(relx=1.0, x=-36, y=16, anchor="ne")
+        self.panel_toggle_button.lift()
 
     def _build_files_section(self) -> None:
         files_block = ctk.CTkFrame(
@@ -167,68 +210,145 @@ class AssistantApp(ctk.CTk):
         )
         label_question_header.grid(row=0, columnspan=2, sticky="ew", padx=20, pady=5)
 
-        self.question = ctk.CTkEntry(
+        # Multi-line textbox so long questions wrap instead of bleeding sideways.
+        self.question = ctk.CTkTextbox(
             message_block,
-            placeholder_text="Write your question here...",
+            wrap="word",
             corner_radius=10,
             height=100,
             fg_color=theme.BG_FIELD,
             border_color=theme.FIELD_BORDER,
+            border_width=1,
             text_color=theme.TEXT_PRIMARY,
         )
         self.question.grid(row=1, columnspan=2, sticky="ew", padx=20, pady=5)
+        self._init_question_placeholder()
 
+        #models folder selection
+        path_models_block = ctk.CTkFrame(
+            message_block,
+            fg_color=theme.BG_FIELD
+        )
+        path_models_block.columnconfigure((0,1,3),weight=1)
+        path_models_block.rowconfigure((0,1),weight=1)
+        path_models_block.grid(row=2, columnspan=2, sticky="ew", padx=20, pady=5)
+
+        self.entry_models_folder = ctk.CTkEntry(
+            path_models_block,
+            placeholder_text="C:/Path/To/Models/Folder/*GGUF",
+            corner_radius=10,
+            height=36,
+            fg_color=theme.BG_FIELD,
+            border_color=theme.FIELD_BORDER,
+            text_color=theme.TEXT_PRIMARY,
+        )
+        self.entry_models_folder.grid(row=0, column=0, columnspan=2, sticky="ew", pady=5, padx=5)
+
+        button_select_models_folder = ctk.CTkButton(
+            path_models_block,
+            text="Select models root folder",
+            command=self.select_models_folder,
+            corner_radius=10,
+            height=36,
+            fg_color=theme.ACCENT,
+            hover_color=theme.ACCENT_HOVER,
+        )
+        button_select_models_folder.grid(row=0, column=3, sticky="ew", pady=5, padx=5)
+
+        self.button_prompt = ctk.CTkButton(
+            path_models_block,
+            text="Send",
+            command=self.run_prompt,
+            corner_radius=10,
+            height=36,
+            fg_color=theme.ACCENT,
+            hover_color=theme.ACCENT_HOVER,
+        )
+        self.button_prompt.grid(row=2, column=3, sticky="ew", pady=5, padx=5)
+
+        #Response stuff
         label_response_header = ctk.CTkLabel(
             message_block,
             text="RESPONSE",
             font=theme.FONT_SECTION,
             text_color=theme.TEXT_MUTED,
         )
-        label_response_header.grid(row=2, columnspan=2, sticky="ew", padx=20, pady=5)
+        label_response_header.grid(row=4, columnspan=2, sticky="ew", padx=20, pady=5)
 
-        response_block = ctk.CTkFrame(
+        # Read-only textbox: wraps long answers and scrolls when they overflow.
+        self.response_content = ctk.CTkTextbox(
             message_block,
+            wrap="word",
             corner_radius=10,
+            height=200,
             fg_color=theme.BG_FIELD,
             border_color=theme.FIELD_BORDER,
             border_width=1,
-        )
-        response_block.grid(row=3, columnspan=2, sticky="ew", padx=20, pady=5)
-        response_block.grid_columnconfigure(0, weight=1)
-
-        self.response_content = ctk.CTkLabel(
-            response_block,
-            text="",
-            font=theme.FONT_RESPONSE,
             text_color=theme.TEXT_PRIMARY,
-            justify="left",
-            anchor="nw",
+            font=theme.FONT_RESPONSE,
         )
-        self.response_content.grid(row=0, column=0, sticky="ew", padx=12, pady=12)
+        self.response_content.grid(row=5, columnspan=2, sticky="ew", padx=20, pady=5)
+        self.response_content.configure(state="disabled")
 
-        def _sync_response_wrap(event):
-            wrap = max(event.width - 24, 120)
-            self.response_content.configure(wraplength=wrap)
+    # ------------------------------------------------------------------ #
+    # Question / response text helpers 
+    # ------------------------------------------------------------------ #
+    def _init_question_placeholder(self) -> None:
+        self._question_showing_placeholder = True
+        self.question.insert("0.0", QUESTION_PLACEHOLDER)
+        self.question.configure(text_color=theme.TEXT_FAINT)
+        self.question.bind("<FocusIn>", self._on_question_focus_in)
+        self.question.bind("<FocusOut>", self._on_question_focus_out)
 
-        response_block.bind("<Configure>", _sync_response_wrap)
+    def _on_question_focus_in(self, _event=None) -> None:
+        if self._question_showing_placeholder:
+            self.question.delete("0.0", "end")
+            self.question.configure(text_color=theme.TEXT_PRIMARY)
+            self._question_showing_placeholder = False
+
+    def _on_question_focus_out(self, _event=None) -> None:
+        if not self.question.get("0.0", "end").strip():
+            self._show_question_placeholder()
+
+    def _show_question_placeholder(self) -> None:
+        self.question.delete("0.0", "end")
+        self.question.insert("0.0", QUESTION_PLACEHOLDER)
+        self.question.configure(text_color=theme.TEXT_FAINT)
+        self._question_showing_placeholder = True
+
+    def _get_question(self) -> str:
+        if self._question_showing_placeholder:
+            return ""
+        return self.question.get("0.0", "end").strip()
+
+    def _set_question(self, text: str) -> None:
+        self._question_showing_placeholder = False
+        self.question.delete("0.0", "end")
+        self.question.insert("0.0", text)
+        self.question.configure(text_color=theme.TEXT_PRIMARY)
+
+    def _set_response(self, text: str) -> None:
+        self.response_content.configure(state="normal")
+        self.response_content.delete("0.0", "end")
+        self.response_content.insert("0.0", text)
+        self.response_content.configure(state="disabled")
 
     def _build_actions_section(self) -> None:
         """Selectors (language/models/mode), run button, models folder, TCP host."""
         actions_block = ctk.CTkFrame(
-            self.main_container,
+            self.slide_panel.body,
             corner_radius=18,
             fg_color=theme.BG_CARD,
             height=50,
             border_width=1,
             border_color=theme.BG_CARD_BORDER,
         )
-        actions_block.grid(row=3, column=0, columnspan=2, sticky="ew", pady=(0, 14))
-        actions_block.grid_columnconfigure((0, 1, 2, 3), weight=1, uniform="group1")
-        actions_block.grid_rowconfigure(0, weight=1)
-        actions_block.grid_rowconfigure(1, weight=1)
+        actions_block.grid_columnconfigure(0, weight=1, uniform="group1")
+        actions_block.grid_rowconfigure((0,1,2,3,4,5,6,7,8,9,10,11,12,13), weight=1)
+        actions_block.pack()
 
         label_language = ctk.CTkLabel(actions_block, text="Language", font=theme.FONT_LABEL, text_color=theme.TEXT_MUTED)
-        label_language.grid(row=0, column=0, sticky="ew", padx=20, pady=5)
+        label_language.grid(row=0, sticky="ew", padx=20, pady=5)
 
         self.language_selector = ctk.CTkOptionMenu(
             actions_block,
@@ -241,16 +361,10 @@ class AssistantApp(ctk.CTk):
             corner_radius=10,
             height=38,
         )
-        self.language_selector.grid(row=1, column=0, sticky="ew", padx=20, pady=5)
+        self.language_selector.grid(row=1, sticky="ew", padx=20, pady=5)
 
         label_query_model = ctk.CTkLabel(actions_block, text="Query Model", font=theme.FONT_LABEL, text_color=theme.TEXT_MUTED)
-        label_query_model.grid(row=0, column=1, sticky="ew", padx=20, pady=5)
-
-        label_reasoning_model = ctk.CTkLabel(actions_block, text="Reasoning Model", font=theme.FONT_LABEL, text_color=theme.TEXT_MUTED)
-        label_reasoning_model.grid(row=0, column=2, sticky="ew", padx=20, pady=5)
-
-        label_mode = ctk.CTkLabel(actions_block, text="Mode", font=theme.FONT_LABEL, text_color=theme.TEXT_MUTED)
-        label_mode.grid(row=0, column=3, sticky="ew", padx=20, pady=5)
+        label_query_model.grid(row=2, sticky="ew", padx=20, pady=5)
 
         self.model_selector_query = ctk.CTkOptionMenu(
             actions_block,
@@ -262,7 +376,10 @@ class AssistantApp(ctk.CTk):
             corner_radius=10,
             height=38,
         )
-        self.model_selector_query.grid(row=1, column=1, sticky="ew", padx=20, pady=5)
+        self.model_selector_query.grid(row=3, sticky="ew", padx=20, pady=5)
+
+        label_reasoning_model = ctk.CTkLabel(actions_block, text="Reasoning Model", font=theme.FONT_LABEL, text_color=theme.TEXT_MUTED)
+        label_reasoning_model.grid(row=4, sticky="ew", padx=20, pady=5)
 
         self.model_selector_reasoning = ctk.CTkOptionMenu(
             actions_block,
@@ -274,11 +391,14 @@ class AssistantApp(ctk.CTk):
             corner_radius=10,
             height=38,
         )
-        self.model_selector_reasoning.grid(row=1, column=2, sticky="ew", padx=20, pady=5)
+        self.model_selector_reasoning.grid(row=5, sticky="ew", padx=20, pady=5)
+
+        label_mode = ctk.CTkLabel(actions_block, text="Mode", font=theme.FONT_LABEL, text_color=theme.TEXT_MUTED)
+        label_mode.grid(row=6, sticky="ew", padx=20, pady=5)
 
         self.mode_selector = ctk.CTkOptionMenu(
             actions_block,
-            values=["Document", "Financial"],
+            values=["Adaptive", "Exact"],
             fg_color=theme.MENU_FG,
             button_color=theme.MENU_BUTTON,
             button_hover_color=theme.MENU_BUTTON_HOVER,
@@ -286,41 +406,7 @@ class AssistantApp(ctk.CTk):
             corner_radius=10,
             height=38,
         )
-        self.mode_selector.grid(row=1, column=3, sticky="ew", padx=20, pady=5)
-
-        self.button_prompt = ctk.CTkButton(
-            actions_block,
-            text="Run",
-            command=self.run_prompt,
-            corner_radius=10,
-            height=36,
-            fg_color=theme.ACCENT,
-            hover_color=theme.ACCENT_HOVER,
-            state="disabled",
-        )
-        self.button_prompt.grid(row=2, column=3, sticky="ew", pady=5)
-
-        self.entry_models_folder = ctk.CTkEntry(
-            actions_block,
-            placeholder_text="C:/Path/To/Models/Folder/*GGUF",
-            corner_radius=10,
-            height=36,
-            fg_color=theme.BG_FIELD,
-            border_color=theme.FIELD_BORDER,
-            text_color=theme.TEXT_PRIMARY,
-        )
-        self.entry_models_folder.grid(row=3, column=0, columnspan=3, sticky="ew", pady=5, padx=5)
-
-        button_select_models_folder = ctk.CTkButton(
-            actions_block,
-            text="Select models root folder",
-            command=self.select_models_folder,
-            corner_radius=10,
-            height=36,
-            fg_color=theme.ACCENT,
-            hover_color=theme.ACCENT_HOVER,
-        )
-        button_select_models_folder.grid(row=3, column=3, sticky="ew", pady=5, padx=5)
+        self.mode_selector.grid(row=7, sticky="ew", padx=20, pady=5)
 
         # Created but only shown on demand (loading bar is gridded in run_prompt).
         self.loading_status = ctk.CTkLabel(actions_block, text="", text_color=theme.TEXT_FAINT, anchor="w")
@@ -335,7 +421,7 @@ class AssistantApp(ctk.CTk):
             border_color=theme.FIELD_BORDER,
             text_color=theme.TEXT_PRIMARY,
         )
-        self.hosting_address.grid(row=4, column=0, columnspan=2, sticky="ew", pady=5, padx=5)
+        self.hosting_address.grid(row=11, columnspan=2, sticky="ew", pady=5, padx=5)
 
         self.hosting_port = ctk.CTkEntry(
             actions_block,
@@ -346,10 +432,10 @@ class AssistantApp(ctk.CTk):
             border_color=theme.FIELD_BORDER,
             text_color=theme.TEXT_PRIMARY,
         )
-        self.hosting_port.grid(row=4, column=2, sticky="ew", pady=5, padx=5)
+        self.hosting_port.grid(row=12, sticky="ew", pady=5, padx=5)
 
         self.switch_tcp_toggle = ctk.CTkSwitch(actions_block, text="TCP", command=self.on_host_toggled)
-        self.switch_tcp_toggle.grid(row=4, column=3, sticky="ew", pady=5, padx=5)
+        self.switch_tcp_toggle.grid(row=13, sticky="ew", pady=5, padx=5)
 
     # ------------------------------------------------------------------ #
     # TCP socket (serve requests from outside the UI)
@@ -397,8 +483,7 @@ class AssistantApp(ctk.CTk):
             if not user_question:
                 return '{"error": "Missing required field: question"}'
 
-            self.after(0, lambda: self.question.delete(0, "end"))
-            self.after(0, lambda: self.question.insert(0, user_question))
+            self.after(0, lambda: self._set_question(user_question))
 
             self.model.model_manager.set_models_root_path(self.entry_models_folder.get())
 
@@ -417,32 +502,11 @@ class AssistantApp(ctk.CTk):
     # ------------------------------------------------------------------ #
     # Model lifecycle
     # ------------------------------------------------------------------ #
-    def _start_model_initialization(self) -> None:
-        self.initialize_dialog = ModelInitializeDialog(self)
-        self.after(0, lambda: threading.Thread(target=self.initialize_model, daemon=True).start())
-
-    # Lazy initialization for the model to avoid long loading times for the window.
-    def initialize_model(self) -> None:
-        from src.model import Model
-        try:
-            self.model = Model(query_count=5)
-            self.model.model_manager.set_models_root_path(root_path=self.selected_models_folder)
-            self.downloaded_models = self.get_downloaded_models()
-            self.after(0, self._on_model_ready)
-        except Exception as exc:
-            self.after(0, lambda error_message=str(exc): self._on_model_error(error_message))
-
     def _on_model_ready(self) -> None:
-        self.button_prompt.configure(state="normal")
-        self.model_selector_query.configure(values=self.downloaded_models)
-        self.model_selector_reasoning.configure(values=self.downloaded_models)
+        """Close the one-time initialization dialog once the model has loaded."""
         if self.initialize_dialog is not None:
             self.initialize_dialog.close("Model loaded")
-
-    def _on_model_error(self, error_message: str) -> None:
-        self.button_prompt.configure(state="disabled")
-        if self.initialize_dialog is not None:
-            self.initialize_dialog.fail(f"Model load failed: {error_message}")
+            self.initialize_dialog = None
 
     def on_language_changed(self, choice: str) -> None:
         if self.model is not None:
@@ -590,9 +654,9 @@ class AssistantApp(ctk.CTk):
     # Running a prompt
     # ------------------------------------------------------------------ #
     def run_prompt(self) -> None:
-        user_question = self.question.get().strip()
+        user_question = self._get_question()
         if not user_question:
-            self.response_content.configure(text="Please type a question before running.")
+            self._set_response("Please type a question before running.")
             return
 
         self.button_prompt.configure(state="disabled", text="Running...")
@@ -600,7 +664,12 @@ class AssistantApp(ctk.CTk):
         self.loading_bar.grid(row=2, column=0, columnspan=3, sticky="ew", padx=20, pady=(8, 0))
         self.loading_bar.start()
 
-        self.model.model_manager.set_models_root_path(self.entry_models_folder.get())
+        # First Send click: show the one-time initialization dialog while the
+        # model dependencies import and the model loads. Both happen off the main
+        # thread (in worker) so the window stays responsive during the long load.
+        if self.model is None and not self._init_dialog_shown:
+            self.initialize_dialog = ModelInitializeDialog(self)
+            self._init_dialog_shown = True
 
         def worker() -> None:
             try:
@@ -611,7 +680,10 @@ class AssistantApp(ctk.CTk):
                                        query_model=self.model_selector_query.get(),
                                        reason_model=self.model_selector_reasoning.get(),
                                        mode=self.mode_selector.get().lower())
+                    self.model.model_manager.set_models_root_path(self.entry_models_folder.get())
+                    self.after(0, self._on_model_ready)
                 else:
+                    self.model.model_manager.set_models_root_path(self.entry_models_folder.get())
                     self.model.set_query_model(self.model_selector_query.get())
                     self.model.set_resoning_model(self.model_selector_reasoning.get())
                     self.model.set_language(self.language_selector.get())
@@ -637,9 +709,13 @@ class AssistantApp(ctk.CTk):
         self.loading_bar.stop()
         self.loading_bar.grid_remove()
         self.loading_status.configure(text="")
-        self.button_prompt.configure(state="normal", text="Run")
+        self.button_prompt.configure(state="normal", text="Send")
         if error:
-            self.response_content.configure(text=f"Run failed: {error}")
+            # A still-open dialog means the first model load failed.
+            if self.initialize_dialog is not None:
+                self.initialize_dialog.fail(f"Model load failed: {error}")
+                self.initialize_dialog = None
+            self._set_response(f"Run failed: {error}")
             print(f"Run failed: {error}")
             return
 
@@ -649,7 +725,7 @@ class AssistantApp(ctk.CTk):
             try:
                 ansjson = json.loads(answer)
             except json.JSONDecodeError:
-                self.response_content.configure(text=str(answer))
+                self._set_response(str(answer))
                 return
 
         response_value = f"""
@@ -660,7 +736,7 @@ class AssistantApp(ctk.CTk):
     {ansjson.get('sources', '')}
     """
 
-        self.response_content.configure(text=response_value)
+        self._set_response(response_value)
 
     # ------------------------------------------------------------------ #
     # Config persistence
@@ -678,12 +754,13 @@ class AssistantApp(ctk.CTk):
         self.model_selector_query.set(config_json['model_query'])
         self.model_selector_reasoning.set(config_json['model_reason'])
         self.update_files_list()
+        self._apply_models_folder(config_json['root_model_path'])
 
     def _on_closing(self) -> None:
         print("Encerrando aplicativo...")
         save_config(
             root_model_path=self.entry_models_folder.get(),
-            previous_question=self.question.get(),
+            previous_question=self._get_question(),
             documents=self.files,
             language=self.language_selector.get(),
             model_query=self.model_selector_query.get(),

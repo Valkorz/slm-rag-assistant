@@ -54,6 +54,8 @@ class AssistantApp(ctk.CTk):
         self._load_initial_files()
         self._apply_saved_config()
 
+        logger.debug("Application initialized.")
+
         self.protocol("WM_DELETE_WINDOW", self._on_closing)
 
     # ------------------------------------------------------------------ #
@@ -73,8 +75,12 @@ class AssistantApp(ctk.CTk):
         self._build_header()
         self._build_files_section()
         self._build_message_section()
+        self._build_logging_section()
         self._build_actions_section()
         self._build_floating_toggle()
+
+        # Append each new log entry on the main thread (logs may come from worker threads).
+        logger.subscribe(lambda entry: self.after(0, lambda e=entry: self._append_log(e)))
 
     def _build_scroll_container(self) -> None:
         page_canvas = tk.Canvas(self, highlightthickness=0, bg=theme.BG_PAGE)
@@ -300,6 +306,56 @@ class AssistantApp(ctk.CTk):
         )
         self.response_content.grid(row=5, columnspan=2, sticky="ew", padx=20, pady=5)
         self.response_content.configure(state="disabled")
+
+    # ------------------------------------------------------------------ #
+    # Logging
+    # ------------------------------------------------------------------ #
+
+    def _build_logging_section(self) -> None:
+        logging_block = ctk.CTkFrame(
+            self.main_container,
+            corner_radius=18,
+            fg_color=theme.BG_CARD,
+            border_width=1,
+            border_color=theme.BG_CARD_BORDER,
+        )
+        logging_block.grid(row=3, column=0, columnspan=2, sticky="ew", pady=(0, 14))
+
+        label_logging_header = ctk.CTkLabel(
+            logging_block,
+            text="LOGS",
+            font=theme.FONT_SECTION,
+            text_color=theme.TEXT_MUTED,
+        )
+        label_logging_header.pack(anchor="w", padx=20, pady=(16, 4))
+
+        self.logging_content = ctk.CTkScrollableFrame(
+            logging_block,
+            corner_radius=10,
+            height=200,
+            fg_color=theme.BG_FIELD,
+            border_color=theme.FIELD_BORDER,
+            border_width=1,
+        )
+        self.logging_content.pack(fill="x", padx=20, pady=(0, 16))
+
+        # Render anything already logged before this view existed.
+        for row in logger.get_messages(count=100):
+            self._append_log(row["message"])
+
+    def _append_log(self, entry: str) -> None:
+        """Append a single log row. Incremental — the list is never cleared/rebuilt."""
+        log_frame = ctk.CTkFrame(self.logging_content, fg_color="transparent")
+        log_frame.pack(fill="x", padx=10, pady=5)
+
+        icon_path = logger.icon_for(entry)
+        if icon_path:
+            log_icon = ctk.CTkImage(light_image=Image.open(icon_path), size=(20, 20))
+            icon_label = ctk.CTkLabel(log_frame, image=log_icon, text="")
+            icon_label.pack(side="left", padx=(0, 10))
+
+        message_label = ctk.CTkLabel(log_frame, text=entry, text_color=theme.TEXT_PRIMARY)
+        message_label.pack(side="left")
 
     # ------------------------------------------------------------------ #
     # Question / response text helpers 
@@ -741,6 +797,7 @@ class AssistantApp(ctk.CTk):
     # Running a prompt
     # ------------------------------------------------------------------ #
     def run_prompt(self) -> None:
+        logger.debug("Generating a response...")
         user_question = self._get_question()
         if not user_question:
             self._set_response("Please type a question before running.")
@@ -811,6 +868,7 @@ class AssistantApp(ctk.CTk):
                 self.initialize_dialog = None
             self._set_response(f"Run failed: {error}")
             print(f"Run failed: {error}")
+            logger.error(f"Run failed: {error}")
             return
 
         if isinstance(answer, dict):
@@ -831,6 +889,7 @@ class AssistantApp(ctk.CTk):
     """
 
         self._set_response(response_value)
+        logger.debug("Generation finished.")
 
     # ------------------------------------------------------------------ #
     # Config persistence

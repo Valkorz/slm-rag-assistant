@@ -30,7 +30,8 @@ class Logger:
     }
 
     _messages           : list[str]
-    
+    _subscribers        : list  # callbacks fired on every new log entry
+
     def __new__(cls):
         if cls._instance is None:
             cls._instance = super().__new__(cls)
@@ -42,28 +43,57 @@ class Logger:
         self._initialized = True
         self.IsSessionActive = True
         self._messages = []
+        self._subscribers = []
+
+    def subscribe(self, callback):
+        """
+        Returns the callback so it can be kept for a later ``unsubscribe()`` or used
+        as a decorator. Logs may be emitted from background threads, so a UI listener
+        should marshal back to the main thread (e.g. ``root.after(0, ...)``).
+        """
+        if callback not in self._subscribers:
+            self._subscribers.append(callback)
+        return callback
+
+    def unsubscribe(self, callback):
+        if callback in self._subscribers:
+            self._subscribers.remove(callback)
+
+    def _notify(self, entry : str):
+        # Iterate a copy so a listener can (un)subscribe from within its callback.
+        for callback in list(self._subscribers):
+            try:
+                callback(entry)
+            except Exception:
+                pass  # a faulty listener must not break logging
+
+    def _log(self, level : str, message : str):
+        entry = f"[{level}]\t@{datetime.now()}:\t{message}"
+        self._messages.append(entry)
+        self._notify(entry)
 
     def info(self, message : str):
-        self._messages.append(f"[Info]\t@{datetime.now()}:\t{message}")
-        pass
+        self._log("Info", message)
 
     def warn(self, message : str):
-        self._messages.append(f"[Warn]\t@{datetime.now()}:\t{message}")
-        pass
+        self._log("Warn", message)
 
     def debug(self, message : str):
-        self._messages.append(f"[Debug]\t@{datetime.now()}:\t{message}")
-        pass
+        self._log("Debug", message)
 
     def error(self, message : str):
-        self._messages.append(f"[Error]\t@{datetime.now()}:\t{message}")
-        pass
+        self._log("Error", message)
+
+    def icon_for(self, entry : str) -> str:
+        """Return the icon path for a formatted log entry (None if the level is unknown)."""
+        level = entry[1:entry.index("]")].upper() if entry.startswith("[") and "]" in entry else ""
+        return self._ICONS_DICT.get(level)
 
     def get_messages(self, count : int, icons : bool = False) -> list[dict]:
-        if not icons:
-            return self._messages[-count:]
-
         result = []
+        if not icons:
+            return [{"message":m} for m in self._messages[-count:]]
+  
         for m in self._messages[-count:]:
             level = m[1:m.index("]")].upper() if m.startswith("[") and "]" in m else ""
             result.append({"message": m, "icon": self._ICONS_DICT.get(level)})

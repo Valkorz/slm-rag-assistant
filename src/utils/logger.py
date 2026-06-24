@@ -84,10 +84,14 @@ class Logger:
     def error(self, message : str):
         self._log("Error", message)
 
+    def level_of(self, entry : str) -> str:
+        return entry[1:entry.index("]")].upper() if entry.startswith("[") and "]" in entry else ""
+
+    def icon_for_level(self, level : str) -> str:
+        return self._ICONS_DICT.get(level.upper())
+
     def icon_for(self, entry : str) -> str:
-        """Return the icon path for a formatted log entry (None if the level is unknown)."""
-        level = entry[1:entry.index("]")].upper() if entry.startswith("[") and "]" in entry else ""
-        return self._ICONS_DICT.get(level)
+        return self.icon_for_level(self.level_of(entry))
 
     def get_messages(self, count : int, icons : bool = False) -> list[dict]:
         result = []

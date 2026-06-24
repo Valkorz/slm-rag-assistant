@@ -1,6 +1,7 @@
 from openai import OpenAI
 from src.memory import get_collection, store, recall, pdf_ingest
 from src.instructions.instructions import Instructions
+from src.utils.logger import logger
 from pathlib import Path
 from .model_manager import ModelManager
 import chromadb
@@ -54,7 +55,7 @@ class Model:
 
         self._loadPdfs()
 
-        print(f"Initialized model with language: {self._language}")
+        logger.info(f"Initialized model with language: {self._language}")
         pass
 
     def set_language(self, lang: str):
@@ -137,7 +138,9 @@ class Model:
                         if isinstance(content, str):
                             return content
 
-        raise TypeError("Model completion format is not supported")
+        error_message = "Model completion format is not supported"
+        logger.error(error_message)
+        raise TypeError(error_message)
 
     def _parse_completion_json(self, completion) -> dict:
         if isinstance(completion, dict) and "queries" in completion:
@@ -146,55 +149,59 @@ class Model:
         text = self._extract_completion_text(completion)
         return self._extract_json_from_text(text)
 
-    def _extract_json_from_text(self, text: str) -> dict:
-        print(f"Raw JSON: {text}")
+    @staticmethod
+    def _balanced_objects(text: str) -> list[str]:
+        """Return every top-level {...} substring, in the order they appear."""
+        objects = []
+        depth = 0
+        start = -1
+        for i, ch in enumerate(text):
+            if ch == "{":
+                if depth == 0:
+                    start = i
+                depth += 1
+            elif ch == "}" and depth > 0:
+                depth -= 1
+                if depth == 0:
+                    objects.append(text[start:i + 1])
+        logger.info(f"Balanced objects: {text}")
+        return objects
 
-        candidates = []
+    def _extract_json_from_text(self, text: str, expected_keys: tuple = ()) -> dict:
+        print(f"Raw JSON: {text}")
         stripped = text.strip()
 
-        # Strategy 1: fix missing brackets from prompt priming (unconditional, tried first)
-        # llama.cpp returns only the completion; the { that ends the prompt is never echoed back.
-        candidate = stripped
-        if candidate and not candidate.startswith("{"):
-            candidate = "{" + candidate
-        if candidate and not candidate.endswith("}"):
-            candidate = candidate + "}"
-        if candidate:
-            candidates.append(candidate)
+        primed = stripped if stripped.startswith("{") else "{" + stripped
 
-        # Strategy 2: fenced code blocks
+        candidates = [primed]
+        candidates.extend(self._balanced_objects(primed))
         for m in re.finditer(r"```(?:json)?\s*([\s\S]*?)\s*```", text, re.IGNORECASE):
             candidates.append(m.group(1).strip())
+        candidates.append(stripped)
 
-        # Strategy 3: balanced brace extraction
-        starts = [m.start() for m in re.finditer(r"\{", text)]
-        for i in starts:
-            depth = 0
-            for j in range(i, len(text)):
-                if text[j] == '{':
-                    depth += 1
-                elif text[j] == '}':
-                    depth -= 1
-                    if depth == 0:
-                        candidates.append(text[i:j+1])
-                        break
-
-        # Strategy 4: direct parse of raw text as last resort
-        candidates.append(text)
-
-        last_valid = None
+        fallback = None
         for cand in candidates:
             try:
                 parsed = json.loads(cand)
-                if isinstance(parsed, dict):
-                    last_valid = parsed
             except Exception:
                 continue
+            if not isinstance(parsed, dict):
+                continue
+            # Prefer the FIRST object that has the fields we asked for; this skips
+            # stray/echoed template objects that appear later in the output.
+            if expected_keys and not any(k in parsed for k in expected_keys):
+                fallback = fallback if fallback is not None else parsed
+                continue
 
-        if last_valid is not None:
-            return last_valid
+            logger.info(f"Parsed JSON: {parsed}")
+            return parsed
 
-        raise ValueError(f"No valid JSON object found in model output.\nRaw text: {text[:200]}")
+        if fallback is not None:
+            return fallback
+        
+        error_message = f"No valid JSON object found in model output.\nRaw text: {text[:200]}"
+        logger.error(error_message)
+        raise ValueError(error_message)
 
     def _is_query_valid_language(self, query: str, expected_lang: str) -> bool:
         words = set(query.lower().split())
@@ -221,10 +228,10 @@ class Model:
             user_question=user_question
         )
         self.model_manager.load(model_name=self._query_model)
-        raw = self.model_manager.create_completion(prompt=instruction, temperature=self._query_temperature)['choices'][0]['text']
+        raw = self.model_manager.create_completion(prompt=instruction, temperature=self._query_temperature, stop=["###", "```"])['choices'][0]['text']
 
         try:
-            parsed = self._extract_json_from_text(raw)
+            parsed = self._extract_json_from_text(raw, expected_keys=("queries",))
         except ValueError:
             return []
 
@@ -232,9 +239,10 @@ class Model:
 
         valid_queries = [q for q in queries if isinstance(q, str) and self._is_query_valid_language(query=q,expected_lang=self._language)]
         if len(valid_queries) < max(1, self._query_count // 2):
-            print(f"Not enough valid search queries. Fallback enabled.")
+            logger.warn(f"Not enough valid search queries. Fallback enabled.")
             valid_queries = self._fallback_queries(user_question=user_question)
 
+        logger.info(f"Valid queries: {valid_queries}")
         return valid_queries
             
     # If no valid queries are generated by the model, create a list of keywords from the question itself
@@ -283,9 +291,13 @@ class Model:
     
     # Base context assembler
     def _build_context(self, queries: list[str]) -> str:
-        results = self._queryRecall(queries=queries)
+        results = self._queryRecall(queries=queries)       
         if not results:
+            logger.error("No sources could be recalled.")
             return self._instructions.get_errSources()
+        
+        logger.info(f"Query recall results: {results}")
+
         return "\n\n".join(
             f"[Source {i+1} | {r['metadata']['source']} p.{r['metadata'].get('page','?')}]\n{r['text']}"
             for i, r in enumerate(results)
@@ -304,12 +316,12 @@ class Model:
             user_question=user_question
         )
         self.model_manager.load(model_name=self._reasoning_model)
-        raw = self.model_manager.create_completion(prompt=prompt_text, temperature=self._temperature)
+        raw = self.model_manager.create_completion(prompt=prompt_text, temperature=self._temperature, stop=["###", "```"])
         raw_text = raw.get('choices', [{}])[0].get('text', '')
-        print(f"Response: \n{raw_text}")
-    
+        logger.debug(f"Response: \n{raw_text}")
+
         try:
-            parsed = self._extract_json_from_text(raw_text)
+            parsed = self._extract_json_from_text(raw_text, expected_keys=("answer",))
         except ValueError:
             return raw_text
     

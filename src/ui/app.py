@@ -2,6 +2,7 @@ import tkinter as tk
 import customtkinter as ctk
 import asyncio
 import json
+import sys
 import threading
 from pathlib import Path
 from tkinter import filedialog
@@ -33,6 +34,9 @@ DEFAULT_SCORE_MINIMUM = 0.6        # minimum retrieval score to keep a chunk
 DEFAULT_CHUNK_DENSITY = 0.55       # is_valid_chunk: min information density
 DEFAULT_CHUNK_DIVERSITY = 0.40     # is_valid_chunk: min lexical diversity
 DEFAULT_CHUNK_AVG_SENT = 5.0       # is_valid_chunk: min average sentence length
+
+IS_FROZEN = getattr(sys, "frozen", False)         # True in a PyInstaller release build
+LOG_LEVELS = ["DEBUG", "INFO", "WARN", "ERROR"]   # order of the log-filter buttons
 
 
 class AssistantApp(ctk.CTk):
@@ -312,6 +316,11 @@ class AssistantApp(ctk.CTk):
     # ------------------------------------------------------------------ #
 
     def _build_logging_section(self) -> None:
+        # Filter state: every level visible by default (DEBUG is dropped in release builds).
+        self._log_rows: list[tuple[str, ctk.CTkFrame]] = []
+        self._visible_levels = {lvl for lvl in LOG_LEVELS if not (IS_FROZEN and lvl == "DEBUG")}
+        self._log_filter_buttons: dict[str, ctk.CTkButton] = {}
+
         logging_block = ctk.CTkFrame(
             self.main_container,
             corner_radius=18,
@@ -329,6 +338,29 @@ class AssistantApp(ctk.CTk):
         )
         label_logging_header.pack(anchor="w", padx=20, pady=(16, 4))
 
+        # Buttons to show/hide log levels
+        filter_bar = ctk.CTkFrame(logging_block, fg_color="transparent")
+        filter_bar.pack(fill="x", padx=20, pady=(0, 6))
+        for level in LOG_LEVELS:
+            if IS_FROZEN and level == "DEBUG":
+                continue  # debug logs are not shown in release builds
+            icon_path = logger.icon_for_level(level)
+            icon = ctk.CTkImage(light_image=Image.open(icon_path), size=(16, 16)) if icon_path else None
+            button = ctk.CTkButton(
+                filter_bar,
+                text=level.capitalize(),
+                image=icon,
+                compound="left",
+                width=88,
+                height=30,
+                corner_radius=8,
+                fg_color=theme.ACCENT,
+                hover_color=theme.ACCENT_HOVER,
+                command=lambda lvl=level: self._toggle_log_level(lvl),
+            )
+            button.pack(side="left", padx=(0, 8))
+            self._log_filter_buttons[level] = button
+
         self.logging_content = ctk.CTkScrollableFrame(
             logging_block,
             corner_radius=10,
@@ -344,18 +376,75 @@ class AssistantApp(ctk.CTk):
             self._append_log(row["message"])
 
     def _append_log(self, entry: str) -> None:
-        """Append a single log row. Incremental — the list is never cleared/rebuilt."""
-        log_frame = ctk.CTkFrame(self.logging_content, fg_color="transparent")
-        log_frame.pack(fill="x", padx=10, pady=5)
+        """Append a single log row. Incremental — existing rows are never rebuilt."""
+        level = logger.level_of(entry)
+        if IS_FROZEN and level == "DEBUG":
+            return  # debug logs are suppressed in release builds
+
+        parts = entry.split("\t", 2)
+        header = " ".join(p.strip() for p in parts[:2])
+        message = parts[2] if len(parts) > 2 else ""
+
+        panel = ctk.CTkFrame(
+            self.logging_content,
+            fg_color=theme.MENU_FG,
+            border_color=theme.FIELD_BORDER,
+            border_width=1,
+            corner_radius=8,
+        )
+        panel.grid_columnconfigure(1, weight=1)
 
         icon_path = logger.icon_for(entry)
         if icon_path:
             log_icon = ctk.CTkImage(light_image=Image.open(icon_path), size=(20, 20))
-            icon_label = ctk.CTkLabel(log_frame, image=log_icon, text="")
-            icon_label.pack(side="left", padx=(0, 10))
+            ctk.CTkLabel(panel, image=log_icon, text="").grid(row=0, column=0, padx=12, pady=8)
 
-        message_label = ctk.CTkLabel(log_frame, text=entry, text_color=theme.TEXT_PRIMARY)
-        message_label.pack(side="left")
+        text_col = ctk.CTkFrame(panel, fg_color="transparent")
+        text_col.grid(row=0, column=1, sticky="ew", padx=(0, 12), pady=8)
+
+        header_label = ctk.CTkLabel(text_col, text=header, text_color=theme.TEXT_FAINT,
+                                    anchor="w", justify="left")
+        header_label.pack(fill="x", anchor="w")
+
+        wrap_labels = [header_label]
+        if message:
+            message_label = ctk.CTkLabel(text_col, text=message, text_color=theme.TEXT_PRIMARY,
+                                         anchor="w", justify="left")
+            message_label.pack(fill="x", anchor="w")
+            wrap_labels.append(message_label)
+
+        def _sync_wrap(event, labels=wrap_labels):
+            wrap = max(event.width - 8, 80)
+            for label in labels:
+                label.configure(wraplength=wrap)
+        text_col.bind("<Configure>", _sync_wrap)
+
+        self._log_rows.append((level, panel))
+        if self._is_level_visible(level):
+            panel.pack(fill="x", padx=10, pady=4)
+
+    def _is_level_visible(self, level: str) -> bool:
+        return level not in LOG_LEVELS or level in self._visible_levels
+
+    def _toggle_log_level(self, level: str) -> None:
+        if level in self._visible_levels:
+            self._visible_levels.discard(level)
+        else:
+            self._visible_levels.add(level)
+
+        button = self._log_filter_buttons.get(level)
+        if button is not None:
+            on = level in self._visible_levels
+            button.configure(fg_color=theme.ACCENT if on else theme.MENU_FG)
+
+        self._apply_log_filter()
+
+    def _apply_log_filter(self) -> None:
+        for _level, frame in self._log_rows:
+            frame.pack_forget()
+        for level, frame in self._log_rows:
+            if self._is_level_visible(level):
+                frame.pack(fill="x", padx=10, pady=4)
 
     # ------------------------------------------------------------------ #
     # Question / response text helpers 

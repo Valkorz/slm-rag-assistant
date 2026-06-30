@@ -50,6 +50,9 @@ class AssistantApp(ctk.CTk):
         self.initialize_dialog = None
         self._init_dialog_shown = False  # init dialog is shown only on the first Send
         self.selected_models_folder = ""
+        self._inner_scrollables = []      # regions that handle their own mouse wheel
+        self._log_selected_index = -1     # highlighted log message (-1 = none)
+        self._selected_log_panel = None
 
         self._build_window()
         self._start_tcp_socket()
@@ -105,6 +108,9 @@ class AssistantApp(ctk.CTk):
             page_canvas.itemconfigure(main_container_window, width=width)
 
         def _on_mousewheel(event):
+            #Don't scroll the page if the pointer is focused on inner-scrollables like the Logs panel.
+            if self._pointer_over_inner_scroll(event):
+                return
             page_canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
 
         self.main_container.bind("<Configure>", _update_scroll_region)
@@ -114,6 +120,17 @@ class AssistantApp(ctk.CTk):
         self.main_container.grid_columnconfigure(0, weight=1)
         self.main_container.grid_columnconfigure(1, weight=1)
         self.main_container.grid_rowconfigure(2, weight=0)
+
+    def _pointer_over_inner_scroll(self, event) -> bool:
+        widget = self.winfo_containing(event.x_root, event.y_root)
+        if widget is None:
+            return False
+        path = str(widget)
+        for region in self._inner_scrollables:
+            base = str(region)
+            if path == base or path.startswith(base + "."):
+                return True
+        return False
 
     def _build_slide_panel(self) -> None:
         self.slide_panel = SlidePanel(
@@ -127,11 +144,11 @@ class AssistantApp(ctk.CTk):
             corner_radius=0,
         )
 
-        # ctk.CTkLabel(
-        #     self.slide_panel.body,
-        #     text="Add panel content here",
-        #     text_color=theme.TEXT_FAINT,
-        # ).pack(pady=20)
+        #Ensure that configs are saved when the panel is closed.
+        self.slide_panel.panelClosingFallback(func=self._save_all_config)
+
+        # The drawer (and its scrollable settings) handle their own wheel scrolling.
+        self._inner_scrollables.append(self.slide_panel)
 
     def _build_header(self) -> None:
         header_card = ctk.CTkFrame(
@@ -361,15 +378,48 @@ class AssistantApp(ctk.CTk):
             button.pack(side="left", padx=(0, 8))
             self._log_filter_buttons[level] = button
 
+        ctk.CTkButton(
+            filter_bar,
+            text="Clear",
+            width=70,
+            height=30,
+            corner_radius=8,
+            fg_color=theme.DANGER,
+            hover_color=theme.DANGER,
+            command=self._clear_logs,
+        ).pack(side="right")
+
+        content_row = ctk.CTkFrame(logging_block, fg_color="transparent")
+        content_row.pack(fill="x", padx=20, pady=(0, 16))
+        content_row.grid_columnconfigure(0, weight=1)
+
         self.logging_content = ctk.CTkScrollableFrame(
-            logging_block,
+            content_row,
             corner_radius=10,
-            height=200,
+            height=500,
             fg_color=theme.BG_FIELD,
             border_color=theme.FIELD_BORDER,
             border_width=1,
         )
-        self.logging_content.pack(fill="x", padx=20, pady=(0, 16))
+        self.logging_content.grid(row=0, column=0, sticky="nsew")
+        self._inner_scrollables.append(self.logging_content)
+
+        # Arrow buttons above/below the scrollbar to step between messages.
+        nav_col = ctk.CTkFrame(content_row, fg_color="transparent")
+        nav_col.grid(row=0, column=1, sticky="ns", padx=(6, 0))
+        ctk.CTkButton(nav_col, text="▲", width=28, height=28, corner_radius=8,
+                      fg_color=theme.ACCENT, hover_color=theme.ACCENT_HOVER,
+                      command=lambda: self._log_nav(-1)).pack(side="top")
+        ctk.CTkButton(nav_col, text="▼", width=28, height=28, corner_radius=8,
+                      fg_color=theme.ACCENT, hover_color=theme.ACCENT_HOVER,
+                      command=lambda: self._log_nav(1)).pack(side="bottom")
+
+        # Stepping also works with arrow keys.
+        log_canvas = self.logging_content._parent_canvas
+        log_canvas.configure(takefocus=True)
+        log_canvas.bind("<Up>", lambda e: self._log_key_nav(-1))
+        log_canvas.bind("<Down>", lambda e: self._log_key_nav(1))
+        self.logging_content.bind("<Button-1>", lambda e: log_canvas.focus_set())
 
         # Render anything already logged before this view existed.
         for row in logger.get_messages(count=100):
@@ -440,14 +490,52 @@ class AssistantApp(ctk.CTk):
         self._apply_log_filter()
 
     def _apply_log_filter(self) -> None:
+        # Hidden rows invalidate the current selection.
+        if self._selected_log_panel is not None and self._selected_log_panel.winfo_exists():
+            self._selected_log_panel.configure(border_color=theme.FIELD_BORDER)
+        self._selected_log_panel = None
+        self._log_selected_index = -1
+
         for _level, frame in self._log_rows:
             frame.pack_forget()
         for level, frame in self._log_rows:
             if self._is_level_visible(level):
                 frame.pack(fill="x", padx=10, pady=4)
 
+    def _log_key_nav(self, delta: int) -> str:
+        self._log_nav(delta)
+        return "break"
+
+    def _log_nav(self, delta: int) -> None:
+        """Highlight and scroll to the previous/next visible log message."""
+        visible = [panel for (lvl, panel) in self._log_rows if self._is_level_visible(lvl)]
+        if not visible:
+            return
+
+        self._log_selected_index = max(0, min(len(visible) - 1, self._log_selected_index + delta))
+        panel = visible[self._log_selected_index]
+
+        if self._selected_log_panel is not None and self._selected_log_panel.winfo_exists():
+            self._selected_log_panel.configure(border_color=theme.FIELD_BORDER)
+        panel.configure(border_color=theme.ACCENT)
+        self._selected_log_panel = panel
+
+        canvas = self.logging_content._parent_canvas
+        canvas.update_idletasks()
+        bbox = canvas.bbox("all")
+        if bbox and bbox[3] - bbox[1] > 0:
+            canvas.yview_moveto(max(0.0, min(1.0, panel.winfo_y() / (bbox[3] - bbox[1]))))
+        canvas.focus_set()  # keep focus on the logs so the arrow keys keep working
+
+    def _clear_logs(self) -> None:
+        for _level, panel in self._log_rows:
+            panel.destroy()
+        self._log_rows.clear()
+        self._selected_log_panel = None
+        self._log_selected_index = -1
+
     # ------------------------------------------------------------------ #
-    # Question / response text helpers 
+    # Question / response text helpers
     # ------------------------------------------------------------------ #
     def _init_question_placeholder(self) -> None:
         self._question_showing_placeholder = True
@@ -499,6 +587,7 @@ class AssistantApp(ctk.CTk):
         )
         actions_block.pack(fill="both", expand=True, padx=4, pady=4)
         actions_block.grid_columnconfigure(0, weight=1)
+        self._inner_scrollables.append(actions_block)
 
         label_language = ctk.CTkLabel(actions_block, text="Language", font=theme.FONT_LABEL, text_color=theme.TEXT_MUTED)
         label_language.grid(row=0, sticky="ew", padx=20, pady=5)
@@ -786,8 +875,8 @@ class AssistantApp(ctk.CTk):
             new_models = [" "]
         self.model_selector_query.configure(values=new_models)
         self.model_selector_reasoning.configure(values=new_models)
-        self.model_selector_query.set(new_models[0])
-        self.model_selector_reasoning.set(new_models[0])
+        # self.model_selector_query.set(new_models[0])
+        # self.model_selector_reasoning.set(new_models[0])
 
     def select_models_folder(self) -> None:
         selected = filedialog.askdirectory(title="Select models root folder")
@@ -886,7 +975,7 @@ class AssistantApp(ctk.CTk):
     # Running a prompt
     # ------------------------------------------------------------------ #
     def run_prompt(self) -> None:
-        logger.debug("Generating a response...")
+        logger.info("Initializing model...")
         user_question = self._get_question()
         if not user_question:
             self._set_response("Please type a question before running.")
@@ -901,6 +990,7 @@ class AssistantApp(ctk.CTk):
             self.initialize_dialog = ModelInitializeDialog(self)
             self._init_dialog_shown = True
 
+        logger.info("Initializing model class...")
         def worker() -> None:
             try:
                 if self.model is None:
@@ -1013,8 +1103,7 @@ class AssistantApp(ctk.CTk):
         self._set_slider(self.chunk_diversity_slider, settings.get('chunk_diversity', DEFAULT_CHUNK_DIVERSITY))
         self._set_slider(self.chunk_avg_sent_slider, settings.get('chunk_avg_sentence', DEFAULT_CHUNK_AVG_SENT))
 
-    def _on_closing(self) -> None:
-        print("Encerrando aplicativo...")
+    def _save_all_config(self):
         save_config(
             root_model_path=self.entry_models_folder.get(),
             previous_question=self._get_question(),
@@ -1031,4 +1120,8 @@ class AssistantApp(ctk.CTk):
                 "chunk_diversity": self._get_chunk_diversity(),
                 "chunk_avg_sentence": self._get_chunk_avg_sentence(),
             })
+    
+    def _on_closing(self) -> None:
+        print("Encerrando aplicativo...")
+        self._save_all_config()
         self.destroy()

@@ -1,9 +1,9 @@
 # This class is used to define different instructions for different languages
 class Instructions:
     _language: str
-    _mode: str  # "document" | "Adaptive"
+    _mode: str  # "Exact" | "Adaptive"
 
-    def __init__(self, lang: str, mode: str = "document"):
+    def __init__(self, lang: str, mode: str = "Exact"):
         self._language = lang
         self._mode = mode
 
@@ -28,7 +28,8 @@ class Instructions:
 
     def get_promptInstruction(self, context: str, user_question: str) -> str:
         lang = self._language.upper()
-        if self._mode == "Adaptive":
+        mode = self._mode.upper()
+        if mode == "ADAPTIVE":
             if lang == "EN":
                 return self._instPrompt_Adaptive_EN(context, user_question)
             elif lang == "PTBR":

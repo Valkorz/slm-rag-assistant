@@ -1,4 +1,5 @@
 import customtkinter as ctk
+from typing import Callable, Optional
 
 from src import theme
 
@@ -14,7 +15,7 @@ class SlidePanel(ctk.CTkFrame):
         interval: int = 10,
         on_close=None,
         **kwargs,
-    ):
+    ):       
         super().__init__(parent, **kwargs)
         self._width = width
         self._step = step
@@ -38,6 +39,11 @@ class SlidePanel(ctk.CTkFrame):
         self._place()
         self._build_chrome(title)
 
+    _on_panel_closing : Optional[Callable[[], None]]
+
+    def panelClosingFallback(self, func : Optional[Callable[[],None]]):
+        self._on_panel_closing = func
+
     def toggle(self) -> None:
         if self._animating:
             return
@@ -51,6 +57,7 @@ class SlidePanel(ctk.CTkFrame):
     def close(self) -> None:
         self.is_open = False
         self._animate_to(self._closed_pos)
+        self._on_panel_closing()
 
     def _build_chrome(self, title: str) -> None:
         header = ctk.CTkFrame(self, fg_color="transparent")

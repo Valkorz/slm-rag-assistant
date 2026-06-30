@@ -1,6 +1,7 @@
 import io
 import os
 import sys
+import threading
 from pathlib import Path
 from datetime import datetime
 
@@ -44,6 +45,9 @@ class Logger:
         self.IsSessionActive = True
         self._messages = []
         self._subscribers = []
+        self._file_lock = threading.Lock()
+        self._log_file = None
+        self._open_log_file()
 
     def subscribe(self, callback):
         """
@@ -65,11 +69,37 @@ class Logger:
             try:
                 callback(entry)
             except Exception:
-                pass  # a faulty listener must not break logging
+                pass 
+
+    def _log_dir(self) -> Path:
+        if getattr(sys, "frozen", False):
+            return Path(os.path.dirname(sys.executable)) / "logs"
+        return Path(__file__).resolve().parent.parent / "logs"
+
+    def _open_log_file(self) -> None:
+        try:
+            log_dir = self._log_dir()
+            log_dir.mkdir(parents=True, exist_ok=True)
+            stamp = f"{datetime.now()}".replace(":", "-").replace(".", "_")
+            self._log_file = open(log_dir / f"log_{stamp}.txt", "a", encoding="utf-8")
+            self._log_file.write(f"-- Logging started: {datetime.now()} --\n\n")
+            self._log_file.flush()
+        except Exception:
+            self._log_file = None 
+
+    def _write_to_file(self, entry : str) -> None:
+        with self._file_lock:
+            if self._log_file is not None and not self._log_file.closed:
+                try:
+                    self._log_file.write(f"{entry}\n")
+                    self._log_file.flush() 
+                except Exception:
+                    pass
 
     def _log(self, level : str, message : str):
         entry = f"[{level}]\t@{datetime.now()}:\t{message}"
         self._messages.append(entry)
+        self._write_to_file(entry)
         self._notify(entry)
 
     def info(self, message : str):
@@ -104,24 +134,20 @@ class Logger:
         return result
         
     def dump(self):
-        self._messages.append(f"-- Logging finished: {datetime.now()} --")
-
-        datetime_str = f"{datetime.now()}".replace(':', '-').replace('.', '_')
-        fname = f"log_{datetime_str}.txt"
-        if getattr(sys, 'frozen', False):
-            dir = Path(os.path.dirname(sys.executable)) / "logs"
-        dir = Path(__file__).resolve().parent.parent / "logs"
-        dir.mkdir(parents=True, exist_ok=True)
-
-        fpath = dir / fname
-        with open(fpath, 'w', encoding='utf-8') as file:
-            file.write(f"-- Logging started --\n\n")
-            for msg in self._messages:
-                file.write(f"{msg}\n")
+        entry = f"-- Logging finished: {datetime.now()} --"
+        self._messages.append(entry)
+        with self._file_lock:
+            if self._log_file is not None and not self._log_file.closed:
+                try:
+                    self._log_file.write(f"{entry}\n")
+                    self._log_file.flush()
+                    self._log_file.close()
+                except Exception:
+                    pass
+                self._log_file = None
 
         self.IsSessionActive = False
         self._messages = []
-        pass
 
 
 # Shared singleton instance — import this anywhere with:

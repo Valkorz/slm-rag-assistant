@@ -6,6 +6,7 @@ import zlib
 import re
 from chromadb import Documents, EmbeddingFunction, Embeddings
 import os
+from src.utils.logger import logger
 
 EN_MODEL   = "all-MiniLM-L6-v2"
 PTBR_MODEL = "paraphrase-multilingual-MiniLM-L12-v2"
@@ -48,6 +49,7 @@ class SentenceTransformerEmbeddings(EmbeddingFunction):
         if model_name not in _loaded_transformers:
             _loaded_transformers[model_name] = SentenceTransformer(model_name)
         self.model = _loaded_transformers[model_name]
+        logger.info(f"Loaded sentence transformer: {model_name}")
 
     def __call__(self, input: Documents) -> Embeddings:
         return self.model.encode(input, convert_to_numpy=True).tolist()

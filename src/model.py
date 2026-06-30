@@ -101,7 +101,7 @@ class Model:
             self._files.append(pdf_file.name)
 
     def addPdfs(self, pdf_files : list[dict]):
-        print(f"Adding pdfs: {pdf_files}")
+        logger.info(f"Adding pdfs: {pdf_files}")
         for pdf_file in pdf_files:
             extra_metadata = None
             metadata_value = pdf_file.get('metadata')
@@ -168,7 +168,6 @@ class Model:
         return objects
 
     def _extract_json_from_text(self, text: str, expected_keys: tuple = ()) -> dict:
-        print(f"Raw JSON: {text}")
         stripped = text.strip()
 
         primed = stripped if stripped.startswith("{") else "{" + stripped
@@ -227,8 +226,11 @@ class Model:
             n_queries=self._query_count,
             user_question=user_question
         )
+
+        logger.info(f"Query generation instructions \n{instruction}")
         self.model_manager.load(model_name=self._query_model)
         raw = self.model_manager.create_completion(prompt=instruction, temperature=self._query_temperature, stop=["###", "```"])['choices'][0]['text']
+        logger.info(f"Raw queries: {raw}")
 
         try:
             parsed = self._extract_json_from_text(raw, expected_keys=("queries",))
@@ -309,12 +311,16 @@ class Model:
 
     def prompt(self, user_question: str) -> str:
         context = self._getQueries(user_question=user_question)
-        print(f"Provided context: {context}")
+        logger.info(f"Generation temperatures: \nQuery temperature: {self._query_temperature}\nResponse temperature:{self._temperature}")
+        logger.info(f"Provided context: {context}")
 
         prompt_text = self._instructions.get_promptInstruction(
             context=context,
             user_question=user_question
         )
+
+        logger.info(f"Prompt instruction: \n{prompt_text}")
+
         self.model_manager.load(model_name=self._reasoning_model)
         raw = self.model_manager.create_completion(prompt=prompt_text, temperature=self._temperature, stop=["###", "```"])
         raw_text = raw.get('choices', [{}])[0].get('text', '')
@@ -323,11 +329,13 @@ class Model:
         try:
             parsed = self._extract_json_from_text(raw_text, expected_keys=("answer",))
         except ValueError:
+            logger.error("Failed to extract JSON from text.")
             return raw_text
     
         try:
             return self._extract_completion_text(parsed)
         except TypeError:
+            logger.error("Failed to extract completion text.")
             return json.dumps(parsed)
 
     

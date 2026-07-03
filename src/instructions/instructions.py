@@ -112,13 +112,14 @@ class Instructions:
             f"- Do NOT add any fields beyond those listed below.\n"
             f"Required structure:\n"
             f"{{\n"
-            f'  "queries": ["query 1", "query 2", "query 3"],\n'
+            f'  "queries": ["query 1", "query 2", "query 3", ... ,"query {n_queries}"],\n'
             f'  "thought_process": "brief explanation of why you chose these queries"\n'
             f"}}\n\n"
             f"### QUERY RULES\n"
             f"- Each query must be 5-10 words.\n"
             f"- Queries must be meaningfully different from each other.\n"
             f"- Focus on the core concepts in the question, not the exact words.\n\n"
+            f"- There must be EXACTLY {n_queries}.\n\n"
             f"### EXAMPLE\n"
             f"Question: What are the tax brackets for 2024?\n"
             f"{{\n"
@@ -231,13 +232,14 @@ class Instructions:
             f"- NÃO adicione campos além dos listados abaixo.\n"
             f"Estrutura obrigatória:\n"
             f"{{\n"
-            f'  "queries": ["consulta 1", "consulta 2", "consulta 3"],\n'
+            f'  "queries": ["consulta 1", "consulta 2", "consulta 3", ..., "consulta {n_queries}"],\n'
             f'  "thought_process": "breve explicação de por que você escolheu essas consultas"\n'
             f"}}\n\n"
             f"### REGRAS DAS CONSULTAS\n"
             f"- Cada consulta deve ter 5-10 palavras.\n"
             f"- As consultas devem ser significativamente diferentes entre si.\n"
             f"- Foque nos conceitos centrais da pergunta, não nas palavras exatas.\n\n"
+            f"- Devem haver EXATAMENTE {n_queries} consultas."
             f"### EXEMPLO\n"
             f"Pergunta: O que são os impostos no Brasil em 2024?\n"
             f"{{\n"

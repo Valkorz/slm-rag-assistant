@@ -191,7 +191,7 @@ This block, along with the original question, is injected into a prompt for the 
 | `sources` | List of source citations used. |
 | `thought_process` | Internal chain-of-thought (hidden from the user). |
 
-Two prompt modes are available: **Document** (factual extraction, no invention allowed) and **Financial** (allows arithmetic and inference from tabular source data, e.g. applying a tax bracket table to a specific income).
+Two prompt modes are available: **Document** (factual extraction, no invention allowed) and **Adaptive** (allows arithmetic and inference from tabular source data, e.g. applying a tax bracket table to a specific income).
 
 #### JSON recovery
 
@@ -235,3 +235,15 @@ On close, the application serialises the current UI state to `config.json`:
 ```
 
 On the next launch, this config is read back and all fields are restored before the window is shown, so the user resumes exactly where they left off.
+
+---
+
+## 🎨 Credits
+
+Icons used in the interface were sourced from [Flaticon](https://www.flaticon.com/) and are used under the [Flaticon Free License](https://www.flaticon.com/legal#nav-flaticon-agreement), which requires attribution to the author:
+
+- [PDF icons created by Dimitry Miroliubov - Flaticon](https://www.flaticon.com/free-icon/pdf_337946)
+- [Crisis icons created by Hilmy Abiyyu A. - Flaticon](https://www.flaticon.com/free-icon/crisis_8213126)
+- [Information icons created by Kumakamu - Flaticon](https://www.flaticon.com/free-icon/information_9627593)
+- [Debug icons created by Blaze150 - Flaticon](https://www.flaticon.com/free-icon/debug_6470817)
+- [Cancel icons created by Roundicons - Flaticon](https://www.flaticon.com/free-icon/cancel_190406)

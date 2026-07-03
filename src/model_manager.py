@@ -1,18 +1,19 @@
 from pathlib import Path
-from typing import Optional 
-from llama_cpp import Llama 
+from typing import Optional
+from llama_cpp import Llama
 from huggingface_hub import hf_hub_download
+from src.utils.logger import logger
 
 class ModelManager:
     #List of verified models
     KNOWN_MODELS = {
         "gemma-4-e4b": {
-            "repo": "unsloth/gemma-4-E2B-it-GGUF",
+            "repo": "unsloth/gemma-4-E4B-it-GGUF",
             "file": "gemma-4-E4B-it-Q4_K_M.gguf",
             "description": "Gemma 4 E4B Instruct (recommended)"
         },
         "gemma-4-e2b": {
-            "repo": "unsloth/gemma-4-E4B-it-GGUF",
+            "repo": "unsloth/gemma-4-E2B-it-GGUF",
             "file": "gemma-4-E2B-it-Q4_K_M.gguf",
             "description": "Gemma 4 E2B Instruct (lightweight)"
         },
@@ -170,13 +171,29 @@ class ModelManager:
         model_name: Optional[str] = None,
         max_tokens: int = 1024,
         temperature: float = 0.1,
-        stop: Optional[list[str]] = None
+        stop: Optional[list[str]] = None,
+        json_schema: Optional[dict] = None
     ) -> str:
         if model_name and model_name != self._loaded_model_name:
             self.load(model_name)
 
         if self._loaded_model is None:
             raise RuntimeError("No model loaded. Call load() first.")
+
+        #Use chat completion template from the GGUF metadata if possible.
+        try:
+            response_format = None
+            if json_schema is not None:
+                response_format = {"type": "json_object", "schema": json_schema}
+            response = self._loaded_model.create_chat_completion(
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=max_tokens,
+                temperature=temperature,
+                response_format=response_format,
+            )
+            return response["choices"][0]["message"]["content"].strip()
+        except Exception as exc:
+            logger.warn(f"Chat completion failed ({exc}); falling back to raw completion.")
 
         response = self._loaded_model(
             prompt,

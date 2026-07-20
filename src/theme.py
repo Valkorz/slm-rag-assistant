@@ -17,6 +17,9 @@ ACCENT = "#2563eb"
 ACCENT_HOVER = "#1d4ed8"
 DANGER = "#990c32"
 
+# Loading bar when idle (gray, no activity)
+LOADING_IDLE = "#4b5563"
+
 # Option menus
 MENU_FG = "#18202a"
 MENU_BUTTON = "#1f2937"

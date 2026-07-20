@@ -229,19 +229,19 @@ class AssistantApp(ctk.CTk):
 
     def _build_message_section(self) -> None:
         """Question entry and response box (share one card)."""
-        message_block = ctk.CTkFrame(
+        self.message_block = ctk.CTkFrame(
             self.main_container,
             corner_radius=18,
             fg_color=theme.BG_CARD,
             border_width=1,
             border_color=theme.BG_CARD_BORDER,
         )
-        message_block.grid_columnconfigure(0, weight=1)
-        message_block.grid_columnconfigure(1, weight=1)
-        message_block.grid(row=2, column=0, columnspan=2, sticky="ew", pady=(0, 14))
+        self.message_block.grid_columnconfigure(0, weight=1)
+        self.message_block.grid_columnconfigure(1, weight=1)
+        self.message_block.grid(row=2, column=0, columnspan=2, sticky="ew", pady=(0, 14))
 
         label_question_header = ctk.CTkLabel(
-            message_block,
+            self.message_block,
             text="YOUR QUESTION",
             font=theme.FONT_SECTION,
             text_color=theme.TEXT_MUTED,
@@ -250,7 +250,7 @@ class AssistantApp(ctk.CTk):
 
         # Multi-line textbox so long questions wrap instead of bleeding sideways.
         self.question = ctk.CTkTextbox(
-            message_block,
+            self.message_block,
             wrap="word",
             corner_radius=10,
             height=100,
@@ -264,7 +264,7 @@ class AssistantApp(ctk.CTk):
 
         #models folder selection
         path_models_block = ctk.CTkFrame(
-            message_block,
+            self.message_block,
             fg_color=theme.BG_FIELD
         )
         path_models_block.columnconfigure((0,1,3),weight=1)
@@ -304,9 +304,15 @@ class AssistantApp(ctk.CTk):
         )
         self.button_prompt.grid(row=2, column=3, sticky="ew", pady=5, padx=5)
 
+        # Always visible right under the Send button: gray while idle,
+        # accent-colored and animated while a prompt is running.
+        self.loading_bar = ctk.CTkProgressBar(path_models_block, mode="determinate")
+        self.loading_bar.grid(row=3, column=3, sticky="ew", padx=5, pady=(0, 5))
+        self._loading_bar_idle()
+
         #Response stuff
         label_response_header = ctk.CTkLabel(
-            message_block,
+            self.message_block,
             text="RESPONSE",
             font=theme.FONT_SECTION,
             text_color=theme.TEXT_MUTED,
@@ -315,7 +321,7 @@ class AssistantApp(ctk.CTk):
 
         # Read-only textbox: wraps long answers and scrolls when they overflow.
         self.response_content = ctk.CTkTextbox(
-            message_block,
+            self.message_block,
             wrap="word",
             corner_radius=10,
             height=200,
@@ -535,6 +541,20 @@ class AssistantApp(ctk.CTk):
         self._log_selected_index = -1
 
     # ------------------------------------------------------------------ #
+    # Loading bar states
+    # ------------------------------------------------------------------ #
+    def _loading_bar_idle(self) -> None:
+        """Full gray bar: nothing is running."""
+        self.loading_bar.stop()
+        self.loading_bar.configure(mode="determinate", progress_color=theme.LOADING_IDLE)
+        self.loading_bar.set(1.0)
+
+    def _loading_bar_active(self) -> None:
+        """Accent-colored indeterminate animation while a prompt runs."""
+        self.loading_bar.configure(mode="indeterminate", progress_color=theme.ACCENT_HOVER)
+        self.loading_bar.start()
+
+    # ------------------------------------------------------------------ #
     # Question / response text helpers
     # ------------------------------------------------------------------ #
     def _init_question_placeholder(self) -> None:
@@ -666,9 +686,7 @@ class AssistantApp(ctk.CTk):
         self.chunk_avg_sent_slider = self._make_slider(
             actions_block, 20, "Chunk min. avg. sentence", from_=0.0, to=20.0, steps=40, default=DEFAULT_CHUNK_AVG_SENT, fmt="{:.1f}")
 
-        # Created but only shown on demand (loading bar is gridded in run_prompt).
         self.loading_status = ctk.CTkLabel(actions_block, text="", text_color=theme.TEXT_FAINT, anchor="w")
-        self.loading_bar = ctk.CTkProgressBar(actions_block, mode="indeterminate", progress_color=theme.ACCENT_HOVER)
 
         self.hosting_address = ctk.CTkEntry(
             actions_block,
@@ -983,8 +1001,7 @@ class AssistantApp(ctk.CTk):
 
         self.button_prompt.configure(state="disabled", text="Running...")
         self.loading_status.configure(text="Loading model...")
-        self.loading_bar.grid(row=2, column=0, columnspan=3, sticky="ew", padx=20, pady=(8, 0))
-        self.loading_bar.start()
+        self._loading_bar_active()
 
         if self.model is None and not self._init_dialog_shown:
             self.initialize_dialog = ModelInitializeDialog(self)
@@ -1037,8 +1054,7 @@ class AssistantApp(ctk.CTk):
         threading.Thread(target=worker, daemon=True).start()
 
     def _finish_run(self, answer="", error: str = "") -> None:
-        self.loading_bar.stop()
-        self.loading_bar.grid_remove()
+        self._loading_bar_idle()
         self.loading_status.configure(text="")
         self.button_prompt.configure(state="normal", text="Send")
         if error:
